@@ -7,7 +7,7 @@ import path   from 'path';
 import { fileURLToPath } from 'url';
 import { log }             from './logger.js';
 import { getCurrentPrice } from './bitget.js';
-import { getStats, getActiveDeals, getClosedDeals, getTrendStatus, getPendingEntries } from './state.js';
+import { getStats, getActiveDeals, getClosedDeals, getTrendStatus, getPendingEntries, getPendingLimitEntries } from './state.js';
 import { config, saveConfig } from './config.js';
 import { analyzeTrend } from './trendMonitor.js';
 
@@ -99,6 +99,7 @@ async function handle(req, res) {
       stats,
       deals: enriched,
       pendingEntries: getPendingEntries(),
+      pendingLimitEntries: getPendingLimitEntries(),
       config: { dca: config.dca, trading: config.trading, isDryRun: process.env.DRY_RUN === 'true' },
       serverTime: new Date().toISOString(),
     });
@@ -178,6 +179,15 @@ async function handle(req, res) {
     const { symbol } = await readBody(req);
     if (!symbol) { err(res, 'symbol required'); return; }
     try { json(res, _callbacks.cancelPendingEntry(symbol.toUpperCase())); }
+    catch (e) { err(res, e.message); }
+    return;
+  }
+
+  // Batalkan limit order yang lagi nunggu fill (base order belum kefill).
+  if (route === '/api/cancel-limit' && method === 'POST') {
+    const { symbol } = await readBody(req);
+    if (!symbol) { err(res, 'symbol required'); return; }
+    try { json(res, await _callbacks.cancelPendingLimitEntry(symbol.toUpperCase())); }
     catch (e) { err(res, e.message); }
     return;
   }

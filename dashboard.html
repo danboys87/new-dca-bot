@@ -115,6 +115,18 @@ tr.day-detail th{background:var(--surface)}
   <div class="day-note">ℹ️ Deal ini nunggu harga naik di atas EMA (Entry Filter) sebelum bot buka base order-nya. Dicek ulang otomatis tiap loop.</div>
 </div>
 
+<div class="panel" id="limit-pending-panel" style="display:none">
+  <div class="panel-header">
+    <span>📝 Limit Order Pending</span>
+    <span class="badge yellow" id="limitPendingBadge">—</span>
+  </div>
+  <table>
+    <thead><tr><th>Symbol</th><th>Harga Limit</th><th>Qty</th><th>Nunggu</th><th>Action</th></tr></thead>
+    <tbody id="limit-pending-body"></tbody>
+  </table>
+  <div class="day-note">ℹ️ Base order dipasang sebagai LIMIT order, belum aktif sampai kefill. Otomatis dibatalkan kalau tidak kefill dalam batas waktu timeout (lihat Config).</div>
+</div>
+
 <div class="panel">
   <div class="panel-header">
     <span>📂 Deal Aktif</span>
@@ -246,6 +258,7 @@ async function refreshAll() {
     document.getElementById('st-order').textContent = d.config.dca.baseOrderSize + ' / ' + d.config.dca.safetyOrderSize + ' USDT';
     renderDeals(d.deals);
     renderPending(d.pendingEntries || {});
+    renderLimitPending(d.pendingLimitEntries || {});
 
     // Jangan timpa form Config kalau user sedang mengetik/belum Save.
     if (!configDirty) {
@@ -276,6 +289,34 @@ function renderPending(pending) {
 async function doCancelEntry(sym) {
   if (!confirm(`Batalkan pending entry ${sym}?`)) return;
   const res = await apiPost('/api/cancel-entry', { symbol: sym });
+  if (res.ok) { refreshAll(); } else { alert('❌ ' + res.error); }
+}
+
+// ── Limit Order Pending (base order dipasang sbg LIMIT order, nunggu fill) ─
+function renderLimitPending(pending) {
+  const syms = Object.keys(pending);
+  const panel = document.getElementById('limit-pending-panel');
+  if (!syms.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+
+  document.getElementById('limitPendingBadge').textContent = `${syms.length} pending`;
+
+  document.getElementById('limit-pending-body').innerHTML = syms.map(sym => {
+    const info = pending[sym];
+    const menit = Math.round((Date.now() - info.placedAt) / 60000);
+    return `<tr>
+      <td><b>${sym}</b></td>
+      <td>${info.price}</td>
+      <td>${info.qty}</td>
+      <td>${menit} menit</td>
+      <td><button class="btn ghost small" onclick="doCancelLimit('${sym}')">Batalkan</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function doCancelLimit(sym) {
+  if (!confirm(`Batalkan limit order ${sym}?\n\nOrder yang belum kefill akan dibatalkan di Bitget.`)) return;
+  const res = await apiPost('/api/cancel-limit', { symbol: sym });
   if (res.ok) { refreshAll(); } else { alert('❌ ' + res.error); }
 }
 
