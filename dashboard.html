@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DCA Bot — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f5f4f0;--surface:#fff;--border:#e2e0d8;--text:#1a1916;--muted:#7a7568;--green:#1a7a4a;--green-bg:#edf7f1;--red:#c0392b;--red-bg:#fdf0ee;--yellow:#b07d20;--yellow-bg:#fdf6e3;--mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;--radius:6px;}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13px;line-height:1.5}
+.wrap{max-width:1260px;margin:0 auto;padding:20px}
+header{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+header h1{font-family:var(--mono);font-size:15px;font-weight:500}
+.badge{font-family:var(--mono);font-size:11px;font-weight:500;padding:3px 8px;border-radius:3px}
+.badge.green{background:var(--green-bg);color:var(--green)}
+.badge.red{background:var(--red-bg);color:var(--red)}
+.badge.yellow{background:var(--yellow-bg);color:var(--yellow)}
+.badge.gray{background:var(--bg);color:var(--muted);border:1px solid var(--border)}
+.top-right{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input,select{font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-radius:var(--radius);padding:6px 9px;background:var(--bg);color:var(--text);outline:none}
+.btn{font-family:var(--sans);font-size:12px;font-weight:500;padding:6px 13px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);cursor:pointer}
+.btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
+.btn.success{background:var(--green);color:#fff;border-color:var(--green)}
+.btn.danger{background:var(--red);color:#fff;border-color:var(--red)}
+.btn.warn{background:var(--yellow-bg);color:var(--yellow);border-color:var(--yellow)}
+.btn.ghost{background:var(--surface);color:var(--text)}
+.btn.small{padding:3px 8px;font-size:11px;white-space:nowrap}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.action-cell{display:flex;flex-direction:row;gap:6px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px}
+.stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.stat-value{font-family:var(--mono);font-size:19px}
+.stat-value.green{color:var(--green)} .stat-value.red{color:var(--red)}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+.panel-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:8px 12px;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg)}
+td{padding:9px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}
+tr:last-child td{border-bottom:none}
+tr.today td{background:var(--yellow-bg)}
+tr.untracked td{background:#faf9f6}
+tr.tp-hold td{background:#fdf9ef}
+tr.day-row{cursor:pointer}
+tr.day-row:hover td{background:var(--bg)}
+tr.day-detail td{padding:0;background:var(--bg)}
+tr.day-detail table{width:100%}
+tr.day-detail th{background:var(--surface)}
+.empty{padding:30px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:12px}
+.config-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.dirty-badge{font-family:var(--mono);font-size:10px;font-weight:500;padding:3px 8px;border-radius:3px;background:var(--yellow-bg);color:var(--yellow);display:none}
+.winrate{font-size:11px;color:var(--muted)}
+.trend-cell{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.day-note{padding:8px 14px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)}
+.compound-body{padding:14px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.compound-info{display:flex;gap:24px;flex-wrap:wrap}
+.compound-item{display:flex;flex-direction:column;gap:2px}
+.compound-item .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.compound-item .value{font-family:var(--mono);font-size:16px}
+.hold-tag{font-size:10px;color:var(--yellow);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>▣ DCA BOT</h1>
+  <span class="badge gray" id="modeLabel">—</span>
+  <span class="badge gray" id="reopenLabel">—</span>
+  <span class="badge gray" id="trendIntervalLabel">—</span>
+  <span class="badge gray" id="entryFilterLabel" style="display:none">—</span>
+  <div class="top-right">
+    <input id="apiUrl" style="width:210px" placeholder="http://localhost:3001">
+    <input id="apiSecret" type="password" style="width:130px" placeholder="Secret (opsional)">
+    <button class="btn primary" onclick="connect()">Connect</button>
+    <button class="btn" onclick="refreshAll()">↻</button>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="stat-label">Total PnL</div><div class="stat-value" id="st-pnl">—</div></div>
+  <div class="stat"><div class="stat-label">PnL Hari Ini</div><div class="stat-value" id="st-pnl-today">—</div></div>
+  <div class="stat"><div class="stat-label">Deal Aktif</div><div class="stat-value" id="st-active">—</div></div>
+  <div class="stat"><div class="stat-label">Closed</div><div class="stat-value" id="st-closed">—</div></div>
+  <div class="stat"><div class="stat-label">Base / Safety Order</div><div class="stat-value" id="st-order" style="font-size:14px">—</div></div>
+</div>
+
+<div class="panel" id="compound-panel" style="display:none">
+  <div class="panel-header">
+    <span>💰 Compounding</span>
+    <span class="badge gray" id="compoundBadge">—</span>
+  </div>
+  <div class="compound-body">
+    <div class="compound-info">
+      <div class="compound-item"><span class="label">Pool Profit</span><span class="value" id="cp-pool">—</span></div>
+      <div class="compound-item"><span class="label">Threshold</span><span class="value" id="cp-threshold">—</span></div>
+      <div class="compound-item"><span class="label">Base Order Sekarang</span><span class="value" id="cp-base">—</span></div>
+      <div class="compound-item"><span class="label">Safety Order Sekarang</span><span class="value" id="cp-so">—</span></div>
+    </div>
+    <button class="btn success" id="cp-apply-btn" onclick="doApplyCompound()" disabled>Terapkan Compounding</button>
+  </div>
+</div>
+
+<div class="panel" id="pending-panel" style="display:none">
+  <div class="panel-header">
+    <span>⏸ Entry Pending</span>
+    <span class="badge yellow" id="pendingBadge">—</span>
+  </div>
+  <table>
+    <thead><tr><th>Symbol</th><th>Nunggu</th><th>Action</th></tr></thead>
+    <tbody id="pending-body"></tbody>
+  </table>
+  <div class="day-note">ℹ️ Deal ini nunggu harga naik di atas EMA (Entry Filter) sebelum bot buka base order-nya. Dicek ulang otomatis tiap loop.</div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>📂 Deal Aktif</span>
+    <span style="display:flex;gap:6px">
+      <input id="startSymbol" placeholder="BTCUSDT" style="width:110px;text-transform:uppercase">
+      <input id="startPrice" type="number" step="any" placeholder="Harga (opsional)" style="width:140px" title="Kosongkan utk market order / default config. Isi utk limit buy PERSIS di harga ini.">
+      <button class="btn success" onclick="doStart()">+ Buka Deal</button>
+    </span>
+  </div>
+  <table>
+    <thead><tr><th>Symbol</th><th>Avg Entry</th><th>Now</th><th>PnL %</th><th>PnL USDT</th><th>SO</th><th>Next SO</th><th>TP</th><th>SL</th><th>Trend</th><th>Action</th></tr></thead>
+    <tbody id="deals-body"><tr><td colspan="11" class="empty">Belum connect</td></tr></tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>📅 PnL Harian</span>
+    <span style="display:flex;gap:6px;align-items:center">
+      <select id="dailyRange" onchange="renderDailyFromCache()" style="width:120px">
+        <option value="14">14 hari</option>
+        <option value="30" selected>30 hari</option>
+        <option value="90">90 hari</option>
+        <option value="99999">Semua</option>
+      </select>
+      <button class="btn" onclick="loadHistory()">↻ Refresh</button>
+    </span>
+  </div>
+  <table>
+    <thead><tr><th>Tanggal</th><th>Deal Ditutup</th><th>Win Rate</th><th>PnL (USDT)</th></tr></thead>
+    <tbody id="daily-body"><tr><td colspan="4" class="empty">—</td></tr></tbody>
+  </table>
+  <div class="day-note">ℹ️ Klik baris tanggal utk lihat detail deal di hari itu. Deal yang ditutup lewat <b>Manual Sell</b> (di luar bot) ikut tercatat tapi PnL-nya tidak dihitung ke Total PnL / Win Rate / Compounding.</div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>⚙ Config DCA</span>
+    <span style="display:flex;align-items:center;gap:8px">
+      <span class="dirty-badge" id="dirtyBadge">● belum disimpan</span>
+      <button class="btn primary" onclick="saveConfig()">Save</button>
+    </span>
+  </div>
+  <div class="config-grid" id="config-grid"><div class="empty" style="grid-column:1/-1">Loading...</div></div>
+</div>
+
+</div>
+
+<script>
+// Default: kalau belum pernah disimpan, pakai origin halaman ini sendiri.
+// Ini bikin dashboard "langsung nyambung" begitu dibuka dari URL Railway
+// (karena apiServer.js sekarang serve dashboard.html ini juga di rute yang sama).
+let API = localStorage.getItem('dca_api_url') || window.location.origin;
+let API_SECRET = localStorage.getItem('dca_api_secret') || '';
+let configDirty = false;     // true selama user sedang mengedit form Config & belum klik Save
+let _historyCache = [];      // simpan hasil /api/history terakhir, dipakai ulang oleh tabel PnL Harian + detail per tanggal
+let _openDays = new Set();   // tanggal mana saja yang detailnya sedang expanded
+
+const TREND_INFO = {
+  bullish: { label: '📈 Bullish', cls: 'green' },
+  bearish: { label: '📉 Bearish', cls: 'red' },
+  netral:  { label: '➖ Netral',  cls: 'yellow' },
+};
+
+const REASON_LABEL = {
+  take_profit:      '🎯 Take Profit',
+  stop_loss:        '🛑 Stop Loss',
+  manual_close:      '🖐 Manual Close (bot sell)',
+  manual_untracked: '📤 Manual Sell',
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('apiUrl').value = API;
+  document.getElementById('apiSecret').value = API_SECRET;
+  connect();
+});
+
+function connect() {
+  API = document.getElementById('apiUrl').value.replace(/\/$/, '') || window.location.origin;
+  API_SECRET = document.getElementById('apiSecret').value.trim();
+  localStorage.setItem('dca_api_url', API);
+  localStorage.setItem('dca_api_secret', API_SECRET);
+  refreshAll();
+  loadHistory();
+  loadCompoundStatus();
+  setInterval(refreshAll, 10000);
+  setInterval(loadHistory, 60000);        // history + PnL harian cukup di-refresh tiap 1 menit
+  setInterval(loadCompoundStatus, 15000); // compounding pool cukup tiap 15 detik
+}
+
+async function apiFetch(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (API_SECRET) headers['X-Secret'] = API_SECRET;
+  const res = await fetch(API + path, { ...opts, headers });
+  return res.json();
+}
+async function apiPost(path, body) { return apiFetch(path, { method: 'POST', body: JSON.stringify(body) }); }
+
+async function refreshAll() {
+  try {
+    const d = await apiFetch('/api/status');
+    if (!d.ok) return;
+    document.getElementById('modeLabel').textContent = d.config.isDryRun ? '🧪 DRY RUN' : '💸 LIVE';
+    const reopenOn = d.config.trading.reopenAfterClose;
+    const reopenEl = document.getElementById('reopenLabel');
+    reopenEl.textContent = reopenOn ? `🔁 Auto Reopen ON (${d.config.trading.cooldownAfterCloseMin ?? 5}m)` : '⏸ Auto Reopen OFF';
+    reopenEl.className = 'badge ' + (reopenOn ? 'green' : 'gray');
+
+    const tf = (d.config.trading.trendTimeframe ?? '1h').toUpperCase();
+    const emaP = d.config.trading.trendEmaPeriod ?? 21;
+    const trendIntervalEl = document.getElementById('trendIntervalLabel');
+    trendIntervalEl.textContent = `🔎 EMA${emaP} @ ${tf}, cek tiap ${d.config.trading.trendCheckIntervalMin ?? 30}m`;
+    trendIntervalEl.className = 'badge gray';
+
+    const entryFilterEl = document.getElementById('entryFilterLabel');
+    if (d.config.trading.entryFilterEnabled) {
+      const efP = d.config.trading.entryFilterEmaPeriod ?? 9;
+      const efTf = (d.config.trading.entryFilterTimeframe ?? '5min').toUpperCase();
+      entryFilterEl.textContent = `🚦 Entry Filter: EMA${efP} @ ${efTf}`;
+      entryFilterEl.style.display = 'inline-block';
+    } else {
+      entryFilterEl.style.display = 'none';
+    }
+
+    document.getElementById('st-pnl').textContent = (d.stats.totalPnlUsdt>=0?'+':'') + d.stats.totalPnlUsdt.toFixed(2) + ' USDT';
+    document.getElementById('st-pnl').className = 'stat-value ' + (d.stats.totalPnlUsdt>=0?'green':'red');
+    document.getElementById('st-active').textContent = d.stats.activeDeals + '/' + d.config.trading.maxActiveDeals;
+    document.getElementById('st-closed').textContent = d.stats.closedCount;
+    document.getElementById('st-order').textContent = d.config.dca.baseOrderSize + ' / ' + d.config.dca.safetyOrderSize + ' USDT';
+    renderDeals(d.deals);
+    renderPending(d.pendingEntries || {});
+
+    // Jangan timpa form Config kalau user sedang mengetik/belum Save.
+    if (!configDirty) {
+      renderConfig(d.config);
+    }
+  } catch(e) { document.getElementById('deals-body').innerHTML = '<tr><td colspan="11" class="empty">Gagal connect ke ' + API + '</td></tr>'; }
+}
+
+// ── Entry Pending ────────────────────────────────────────────────────────
+function renderPending(pending) {
+  const syms = Object.keys(pending);
+  const panel = document.getElementById('pending-panel');
+  if (!syms.length) { panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+
+  document.getElementById('pendingBadge').textContent = `${syms.length} pending`;
+
+  document.getElementById('pending-body').innerHTML = syms.map(sym => {
+    const menit = Math.round((Date.now() - pending[sym].requestedAt) / 60000);
+    return `<tr>
+      <td><b>${sym}</b></td>
+      <td>${menit} menit</td>
+      <td><button class="btn ghost small" onclick="doCancelEntry('${sym}')">Batalkan</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function doCancelEntry(sym) {
+  if (!confirm(`Batalkan pending entry ${sym}?`)) return;
+  const res = await apiPost('/api/cancel-entry', { symbol: sym });
+  if (res.ok) { refreshAll(); } else { alert('❌ ' + res.error); }
+}
+
+// ── Compounding ──────────────────────────────────────────────────────────
+async function loadCompoundStatus() {
+  try {
+    const res = await apiFetch('/api/compound/status');
+    const panel = document.getElementById('compound-panel');
+    if (!res.ok || !res.enabled) { panel.style.display = 'none'; return; }
+    panel.style.display = 'block';
+
+    document.getElementById('cp-pool').textContent = (res.pool >= 0 ? '+' : '') + res.pool.toFixed(2) + ' USDT';
+    document.getElementById('cp-pool').style.color = res.pool >= 0 ? 'var(--green)' : 'var(--red)';
+    document.getElementById('cp-threshold').textContent = res.threshold + ' USDT';
+    document.getElementById('cp-base').textContent = res.currentBaseOrderSize + ' USDT';
+    document.getElementById('cp-so').textContent = res.currentSafetyOrderSize + ' USDT';
+
+    const badge = document.getElementById('compoundBadge');
+    badge.textContent = res.autoApply ? '⚡ Auto-Apply' : (res.ready ? '✅ Siap Diterapkan' : '⏳ Menunggu Threshold');
+    badge.className = 'badge ' + (res.ready ? 'green' : 'gray');
+
+    const btn = document.getElementById('cp-apply-btn');
+    btn.disabled = !res.ready || res.autoApply;
+    btn.textContent = res.autoApply ? 'Auto-Apply Aktif' : 'Terapkan Compounding';
+  } catch (e) { /* diam saja, biar gak ganggu panel lain kalau lagi gagal connect */ }
+}
+
+async function doApplyCompound() {
+  if (!confirm('Terapkan compounding sekarang?\n\nBase Order & Safety Order size akan naik proporsional memakai seluruh profit yang terkumpul, lalu pool direset ke 0.')) return;
+  const res = await apiPost('/api/compound/apply', {});
+  if (res.ok) {
+    alert(`✅ Compounding diterapkan!\nBase: ${res.oldBase} → ${res.newBase} USDT\nSafety Order: ${res.oldSO} → ${res.newSO} USDT`);
+    loadCompoundStatus();
+    refreshAll();
+  } else {
+    alert('❌ ' + res.error);
+  }
+}
+
+function renderDeals(deals) {
+  const entries = Object.entries(deals || {});
+  const tbody = document.getElementById('deals-body');
+  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">Tidak ada deal aktif</td></tr>'; return; }
+  tbody.innerHTML = entries.map(([sym, d]) => {
+    const sign = d.pnlPct >= 0 ? '+' : '';
+    const cls  = d.pnlPct >= 0 ? 'green' : 'red';
+    const slText = d.slPrice ? d.slPrice.toFixed(6) : (d.nextSOPrice !== null ? 'belum aktif' : '—');
+    const tpTitle = (d.tpPriceBase != null && d.tpPriceAverage != null)
+      ? `title="base: ${d.tpPriceBase.toFixed(6)} | avg: ${d.tpPriceAverage.toFixed(6)} (dipakai: yang terdekat)"`
+      : '';
+    const t = TREND_INFO[d.trendStatus] || { label: '— belum dicek', cls: 'gray' };
+    const holdTag = d.tpHold ? '<br><span class="hold-tag">⏸ HOLD</span>' : '';
+    return `<tr class="${d.tpHold ? 'tp-hold' : ''}">
+      <td><b>${sym}</b></td>
+      <td>${d.avgPrice?.toFixed(6)}</td>
+      <td>${d.currentPrice ?? '—'}</td>
+      <td style="color:var(--${cls})">${sign}${d.pnlPct?.toFixed(2) ?? '—'}%</td>
+      <td style="color:var(--${cls})">${d.pnlUsdt != null ? (sign + d.pnlUsdt.toFixed(2) + ' USDT') : '—'}</td>
+      <td>${d.safetyOrdersFilled}</td>
+      <td>${d.nextSOPrice?.toFixed(6) ?? 'habis'}</td>
+      <td style="color:var(--green)" ${tpTitle}>${d.tpPrice?.toFixed(6) ?? '—'}${holdTag}</td>
+      <td style="color:var(--red)">${slText}</td>
+      <td>
+        <div class="trend-cell">
+          <span class="badge ${t.cls}" id="trend-badge-${sym}">${t.label}</span>
+          <button class="btn small" onclick="doCheckTrend('${sym}')" title="Cek tren sekarang (live)">↻</button>
+        </div>
+      </td>
+      <td>
+        <div class="action-cell">
+          <button class="btn danger small" onclick="doClose('${sym}')" title="Bot eksekusi market sell asli">Close (Sell)</button>
+          <button class="btn ghost small" onclick="doUntrack('${sym}')" title="Kamu sudah jual sendiri di luar bot — bot cuma berhenti mantau, TIDAK ada order, PnL tidak dihitung">Manual Sell</button>
+          ${d.tpHold
+            ? `<button class="btn warn small" onclick="doResume('${sym}')" title="Aktifkan lagi TP normal">▶ Resume TP</button>`
+            : `<button class="btn ghost small" onclick="doHold('${sym}')" title="Bekukan TP sementara — SO & SL tetap normal, nunggu harga naik lebih tinggi dulu">⏸ Hold TP</button>`}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── TP Hold — bekukan/aktifkan lagi Take Profit per deal ───────────────────
+async function doHold(sym) {
+  if (!confirm(`Bekukan TP utk ${sym}?\n\nDeal TIDAK akan dijual walau harga sudah nyentuh target TP. Safety Order & Stop Loss tetap jalan normal. Klik "Resume TP" nanti kalau mau balikin ke normal.`)) return;
+  const res = await apiPost('/api/hold', { symbol: sym });
+  if (res.ok) { refreshAll(); } else { alert('❌ ' + res.error); }
+}
+
+async function doResume(sym) {
+  const res = await apiPost('/api/resume', { symbol: sym });
+  if (res.ok) { refreshAll(); } else { alert('❌ ' + res.error); }
+}
+
+// ── Trend Monitor — cek manual (live), tidak menunggu loop background ──────
+async function doCheckTrend(sym) {
+  const badge = document.getElementById(`trend-badge-${sym}`);
+  if (badge) { badge.textContent = '⏳ Menganalisa...'; badge.className = 'badge gray'; }
+  try {
+    const res = await apiFetch(`/api/trend/${sym}`);
+    if (!res.ok) { alert(`❌ ${sym}: ${res.error}`); refreshAll(); return; }
+    const t = TREND_INFO[res.status] || { label: res.status, cls: 'gray' };
+    if (badge) { badge.textContent = t.label; badge.className = 'badge ' + t.cls; }
+    alert(
+      `${sym} — ${t.label}\n` +
+      `Harga: ${res.price}\n` +
+      `EMA${res.period}: ${res.ema.toFixed(6)}\n` +
+      `Timeframe: ${res.timeframe.toUpperCase()}\n` +
+      `(Cek live — status tersimpan yang dipakai deteksi perubahan otomatis baru terupdate di loop berikutnya)`
+    );
+  } catch (e) {
+    alert(`❌ ${sym}: ${e.message}`);
+    if (badge) { badge.textContent = '— error'; badge.className = 'badge red'; }
+  }
+}
+
+// ── PnL Harian + detail per tanggal (menggantikan tabel Deal History terpisah) ─
+async function loadHistory() {
+  const res = await apiFetch('/api/history?limit=1000');
+  _historyCache = (res.ok && res.deals) ? res.deals : [];
+  renderDailyFromCache();
+}
+
+function dayKeyOf(closedAt) {
+  const dt = new Date(closedAt);
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+
+function computeDailyStats(deals) {
+  const map = {}; // 'YYYY-MM-DD' -> { pnlUsdt, count, wins, scoredCount }
+  for (const d of deals) {
+    const key = dayKeyOf(d.closedAt);
+    if (!map[key]) map[key] = { pnlUsdt: 0, count: 0, wins: 0, scoredCount: 0 };
+    map[key].count += 1; // semua deal closed (termasuk Manual Sell) dihitung di sini
+    if (d.pnlUsdt != null) { // hanya deal yang ada PnL asli yang masuk hitungan PnL/win rate
+      map[key].pnlUsdt += d.pnlUsdt;
+      map[key].scoredCount += 1;
+      if (d.pnlUsdt >= 0) map[key].wins += 1;
+    }
+  }
+  return map;
+}
+
+function dealsForDay(key) {
+  return _historyCache
+    .filter(d => dayKeyOf(d.closedAt) === key)
+    .sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt));
+}
+
+function todayKey() {
+  const dt = new Date();
+  return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+}
+
+function formatDayLabel(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const label = dt.toLocaleDateString('id-ID', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+  return key === todayKey() ? `${label} (hari ini)` : label;
+}
+
+function buildDayDetailHtml(key) {
+  const deals = dealsForDay(key);
+  if (!deals.length) return '<div class="empty">Tidak ada deal</div>';
+  const rows = deals.map(d => {
+    const isUntracked = d.pnlUsdt == null;
+    const sign = !isUntracked && d.pnlPct >= 0 ? '+' : '';
+    const cls  = !isUntracked && d.pnlPct >= 0 ? 'green' : 'red';
+    const reasonText = REASON_LABEL[d.reason] || d.reason;
+    return `<tr class="${isUntracked ? 'untracked' : ''}">
+      <td><b>${d.symbol}</b></td>
+      <td>${d.avgPrice.toFixed(6)}</td>
+      <td>${d.exitPrice != null ? d.exitPrice.toFixed(6) : '—'}</td>
+      <td ${isUntracked ? '' : `style="color:var(--${cls})"`}>${isUntracked ? '—' : sign + d.pnlPct.toFixed(2) + '%'}</td>
+      <td ${isUntracked ? '' : `style="color:var(--${cls})"`}>${isUntracked ? '— (manual)' : sign + d.pnlUsdt.toFixed(2) + ' USDT'}</td>
+      <td>${d.safetyOrdersFilled}</td>
+      <td>${reasonText}</td>
+      <td style="font-size:10px">${new Date(d.closedAt).toLocaleString('id-ID')}</td>
+    </tr>`;
+  }).join('');
+  return `<table>
+    <thead><tr><th>Symbol</th><th>Avg</th><th>Exit</th><th>PnL%</th><th>PnL USDT</th><th>SO</th><th>Reason</th><th>Waktu</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function toggleDay(key) {
+  if (_openDays.has(key)) _openDays.delete(key);
+  else _openDays.add(key);
+  renderDailyFromCache();
+}
+
+function renderDailyFromCache() {
+  const rangeDays = parseInt(document.getElementById('dailyRange')?.value || '30');
+  const dailyMap  = computeDailyStats(_historyCache);
+  const keys      = Object.keys(dailyMap).sort().reverse().slice(0, rangeDays);
+
+  // Update kartu "PnL Hari Ini"
+  const today = dailyMap[todayKey()];
+  const todayPnl = today ? today.pnlUsdt : 0;
+  const stToday = document.getElementById('st-pnl-today');
+  stToday.textContent = (todayPnl >= 0 ? '+' : '') + todayPnl.toFixed(2) + ' USDT';
+  stToday.className = 'stat-value ' + (todayPnl >= 0 ? 'green' : 'red');
+
+  const tbody = document.getElementById('daily-body');
+  if (!keys.length) { tbody.innerHTML = '<tr><td colspan="4" class="empty">Belum ada deal yang closed</td></tr>'; return; }
+
+  tbody.innerHTML = keys.map(key => {
+    const row  = dailyMap[key];
+    const sign = row.pnlUsdt >= 0 ? '+' : '';
+    const cls  = row.pnlUsdt >= 0 ? 'green' : 'red';
+    const winRate = row.scoredCount ? Math.round((row.wins / row.scoredCount) * 100) : 0;
+    const isToday = key === todayKey();
+    const isOpen  = _openDays.has(key);
+    const mainRow = `<tr class="day-row ${isToday ? 'today' : ''}" onclick="toggleDay('${key}')">
+      <td>${isOpen ? '▾' : '▸'} ${formatDayLabel(key)}</td>
+      <td>${row.count}</td>
+      <td>${row.wins}/${row.scoredCount} <span class="winrate">(${winRate}%)</span></td>
+      <td style="color:var(--${cls})">${sign}${row.pnlUsdt.toFixed(2)} USDT</td>
+    </tr>`;
+    const detailRow = isOpen
+      ? `<tr class="day-detail"><td colspan="4">${buildDayDetailHtml(key)}</td></tr>`
+      : '';
+    return mainRow + detailRow;
+  }).join('');
+}
+
+function renderConfig(cfg) {
+  const d = cfg.dca, t = cfg.trading;
+  document.getElementById('config-grid').innerHTML = `
+    <div class="field"><label>Base Order (USDT)</label><input id="cfg-base" type="number" value="${d.baseOrderSize}"></div>
+    <div class="field"><label>Safety Order (USDT)</label><input id="cfg-so" type="number" value="${d.safetyOrderSize}"></div>
+    <div class="field"><label>Max Safety Order</label><input id="cfg-maxso" type="number" value="${d.maxSafetyOrders}"></div>
+    <div class="field"><label>Deviasi SO (%)</label><input id="cfg-dev" type="number" step="0.1" value="${d.priceDeviationPercent}"></div>
+    <div class="field"><label>SO Volume Scale</label><input id="cfg-volscale" type="number" step="0.1" value="${d.safetyOrderVolumeScale}"></div>
+    <div class="field"><label>SO Step Scale</label><input id="cfg-stepscale" type="number" step="0.1" value="${d.safetyOrderStepScale}"></div>
+    <div class="field"><label>Take Profit (%)</label><input id="cfg-tp" type="number" step="0.1" value="${d.takeProfitPercent}"></div>
+    <div class="field"><label>TP Basis</label><select id="cfg-tpbasis"><option value="average" ${d.takeProfitBasis==='average'?'selected':''}>Average (semua order)</option><option value="base" ${d.takeProfitBasis==='base'?'selected':''}>Base order saja</option><option value="both" ${d.takeProfitBasis==='both'?'selected':''}>Base atau Average (mana duluan)</option></select></div>
+    <div class="field"><label>Stop Loss Aktif</label><select id="cfg-slon"><option value="true" ${d.stopLossEnabled?'selected':''}>Ya</option><option value="false" ${!d.stopLossEnabled?'selected':''}>Tidak</option></select></div>
+    <div class="field"><label>Stop Loss (%)</label><input id="cfg-sl" type="number" step="0.1" value="${d.stopLossPercent}"></div>
+    <div class="field"><label>SL Basis</label><select id="cfg-slbasis"><option value="average" ${d.stopLossBasis==='average'?'selected':''}>Average (semua order)</option><option value="base" ${d.stopLossBasis==='base'?'selected':''}>Base order saja</option></select></div>
+    <div class="field"><label>Max Deal Bersamaan</label><input id="cfg-maxdeal" type="number" value="${t.maxActiveDeals}"></div>
+    <div class="field"><label>Check Interval (detik)</label><input id="cfg-interval" type="number" value="${t.checkIntervalSec}"></div>
+    <div class="field"><label>Auto Reopen Setelah TP</label><select id="cfg-reopen"><option value="true" ${t.reopenAfterClose?'selected':''}>ON</option><option value="false" ${!t.reopenAfterClose?'selected':''}>OFF</option></select></div>
+    <div class="field"><label>Cooldown Reopen (menit)</label><input id="cfg-cooldown" type="number" value="${t.cooldownAfterCloseMin ?? 5}"></div>
+    <div class="field"><label>Trend EMA Period</label><input id="cfg-trendema" type="number" value="${t.trendEmaPeriod ?? 21}"></div>
+    <div class="field"><label>Trend Timeframe</label>
+      <select id="cfg-trendtf">
+        <option value="15min" ${(t.trendTimeframe ?? '1h')==='15min'?'selected':''}>15 menit</option>
+        <option value="30min" ${(t.trendTimeframe ?? '1h')==='30min'?'selected':''}>30 menit</option>
+        <option value="1h" ${(t.trendTimeframe ?? '1h')==='1h'?'selected':''}>1 jam</option>
+        <option value="4h" ${(t.trendTimeframe ?? '1h')==='4h'?'selected':''}>4 jam</option>
+        <option value="1day" ${(t.trendTimeframe ?? '1h')==='1day'?'selected':''}>1 hari</option>
+      </select>
+    </div>
+    <div class="field"><label>Cek Tren (menit)</label><input id="cfg-trendinterval" type="number" value="${t.trendCheckIntervalMin ?? 30}"></div>
+    <div class="field"><label>Entry Filter Aktif</label><select id="cfg-entryfilteron"><option value="true" ${t.entryFilterEnabled?'selected':''}>Ya</option><option value="false" ${!t.entryFilterEnabled?'selected':''}>Tidak</option></select></div>
+    <div class="field"><label>Entry Filter EMA Period</label><input id="cfg-entryema" type="number" value="${t.entryFilterEmaPeriod ?? 9}"></div>
+    <div class="field"><label>Entry Filter Timeframe</label>
+      <select id="cfg-entrytf">
+        <option value="1min" ${(t.entryFilterTimeframe ?? '5min')==='1min'?'selected':''}>1 menit</option>
+        <option value="3min" ${(t.entryFilterTimeframe ?? '5min')==='3min'?'selected':''}>3 menit</option>
+        <option value="5min" ${(t.entryFilterTimeframe ?? '5min')==='5min'?'selected':''}>5 menit</option>
+        <option value="15min" ${(t.entryFilterTimeframe ?? '5min')==='15min'?'selected':''}>15 menit</option>
+        <option value="30min" ${(t.entryFilterTimeframe ?? '5min')==='30min'?'selected':''}>30 menit</option>
+        <option value="1h" ${(t.entryFilterTimeframe ?? '5min')==='1h'?'selected':''}>1 jam</option>
+      </select>
+    </div>
+    <div class="field"><label>Limit Order Timeout (jam)</label><input id="cfg-entrylimittimeout" type="number" step="0.1" min="0" value="${((t.entryLimitTimeoutMin ?? 15) / 60).toFixed(2)}" title="Batas waktu tunggu fill limit order base order sebelum otomatis dibatalkan. Disimpan internal dalam menit (entryLimitTimeoutMin), ditampilkan di sini dalam jam."></div>
+    <div class="field"><label>Compounding Aktif</label><select id="cfg-compoundon"><option value="true" ${t.compoundingEnabled?'selected':''}>Ya</option><option value="false" ${!t.compoundingEnabled?'selected':''}>Tidak</option></select></div>
+    <div class="field"><label>Compounding Threshold (USDT)</label><input id="cfg-compoundthreshold" type="number" value="${t.compoundingThresholdUsdt ?? 10}"></div>
+    <div class="field"><label>Compounding Auto-Apply</label><select id="cfg-compoundauto"><option value="false" ${!t.compoundingAutoApply?'selected':''}>Manual (nunggu konfirmasi)</option><option value="true" ${t.compoundingAutoApply?'selected':''}>Otomatis</option></select></div>
+  `;
+
+  const grid = document.getElementById('config-grid');
+  const markDirty = () => {
+    configDirty = true;
+    document.getElementById('dirtyBadge').style.display = 'inline-block';
+  };
+  grid.oninput  = markDirty;
+  grid.onchange = markDirty;
+}
+
+async function saveConfig() {
+  const updates = {
+    dca: {
+      baseOrderSize: parseFloat(document.getElementById('cfg-base').value),
+      safetyOrderSize: parseFloat(document.getElementById('cfg-so').value),
+      maxSafetyOrders: parseInt(document.getElementById('cfg-maxso').value),
+      priceDeviationPercent: parseFloat(document.getElementById('cfg-dev').value),
+      safetyOrderVolumeScale: parseFloat(document.getElementById('cfg-volscale').value),
+      safetyOrderStepScale: parseFloat(document.getElementById('cfg-stepscale').value),
+      takeProfitPercent: parseFloat(document.getElementById('cfg-tp').value),
+      takeProfitBasis: document.getElementById('cfg-tpbasis').value,
+      stopLossEnabled: document.getElementById('cfg-slon').value === 'true',
+      stopLossPercent: parseFloat(document.getElementById('cfg-sl').value),
+      stopLossBasis: document.getElementById('cfg-slbasis').value,
+    },
+    trading: {
+      maxActiveDeals: parseInt(document.getElementById('cfg-maxdeal').value),
+      checkIntervalSec: parseInt(document.getElementById('cfg-interval').value),
+      reopenAfterClose: document.getElementById('cfg-reopen').value === 'true',
+      cooldownAfterCloseMin: parseInt(document.getElementById('cfg-cooldown').value),
+      trendEmaPeriod: parseInt(document.getElementById('cfg-trendema').value),
+      trendTimeframe: document.getElementById('cfg-trendtf').value,
+      trendCheckIntervalMin: parseInt(document.getElementById('cfg-trendinterval').value),
+      entryFilterEnabled: document.getElementById('cfg-entryfilteron').value === 'true',
+      entryFilterEmaPeriod: parseInt(document.getElementById('cfg-entryema').value),
+      entryFilterTimeframe: document.getElementById('cfg-entrytf').value,
+      entryLimitTimeoutMin: Math.round(parseFloat(document.getElementById('cfg-entrylimittimeout').value) * 60),
+      compoundingEnabled: document.getElementById('cfg-compoundon').value === 'true',
+      compoundingThresholdUsdt: parseFloat(document.getElementById('cfg-compoundthreshold').value),
+      compoundingAutoApply: document.getElementById('cfg-compoundauto').value === 'true',
+    },
+  };
+  const res = await apiPost('/api/config', updates);
+  alert(res.ok ? '✅ Config tersimpan (berlaku utk deal baru)' : '❌ ' + res.error);
+  if (res.ok) {
+    configDirty = false;
+    document.getElementById('dirtyBadge').style.display = 'none';
+    refreshAll();
+    loadCompoundStatus();
+  }
+}
+
+async function doStart() {
+  const sym = document.getElementById('startSymbol').value.trim().toUpperCase();
+  if (!sym) return alert('Masukkan symbol');
+  const priceRaw = document.getElementById('startPrice').value.trim();
+  const price = priceRaw ? parseFloat(priceRaw) : null;
+  if (priceRaw && !(price > 0)) return alert('Harga tidak valid');
+
+  const confirmMsg = price
+    ? `Buka deal DCA untuk ${sym} sebagai LIMIT ORDER @ ${price}?`
+    : `Buka deal DCA untuk ${sym}?`;
+  if (!confirm(confirmMsg)) return;
+
+  const res = await apiPost('/api/start', price ? { symbol: sym, price } : { symbol: sym });
+  if (res.pending) {
+    alert(`⏸ ${res.message}`);
+  } else {
+    alert(res.ok ? `✅ Deal ${sym} dibuka` : `❌ ${res.error}`);
+  }
+  if (res.ok) { document.getElementById('startSymbol').value=''; document.getElementById('startPrice').value=''; refreshAll(); }
+}
+
+async function doClose(sym) {
+  if (!confirm(`Tutup deal ${sym} sekarang?\n\nBot akan eksekusi MARKET SELL asli ke Bitget.`)) return;
+  const res = await apiPost('/api/close', { symbol: sym });
+  alert(res.ok ? `✅ Deal ${sym} ditutup` : `❌ ${res.error}`);
+  if (res.ok) { refreshAll(); loadHistory(); loadCompoundStatus(); }
+}
+
+async function doUntrack(sym) {
+  if (!confirm(`Tandai deal ${sym} selesai TANPA sell dari bot (Manual Sell)?\n\nPakai ini HANYA kalau kamu SUDAH jual ${sym} sendiri langsung di app exchange.\nBot TIDAK akan mengirim order apapun, dan PnL deal ini TIDAK akan dihitung ke statistik/Total PnL/compounding.`)) return;
+  const res = await apiPost('/api/untrack', { symbol: sym });
+  alert(res.ok ? `✅ ${sym} ditandai selesai (Manual Sell). PnL tidak dihitung.` : `❌ ${res.error}`);
+  if (res.ok) { refreshAll(); loadHistory(); }
+}
+</script>
+</body>
+</html>

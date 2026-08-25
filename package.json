@@ -1,0 +1,21 @@
+{
+  "name": "dca-bot-bitget",
+  "version": "1.0.0",
+  "description": "DCA Trading Bot (Safety Order style, ala 3Commas) — Bitget Spot",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "cross-env DRY_RUN=true node index.js",
+    "deals": "node index.js --list-only"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cross-env": "^7.0.3",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
