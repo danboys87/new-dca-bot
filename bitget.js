@@ -118,3 +118,47 @@ export async function testConnection() {
     return { ok: false, error: err.message };
   }
 }
+
+/**
+ * Konversi field `feeDetail` dari response order Bitget (getOrder) jadi estimasi
+ * fee dalam USDT (atau quoteAsset lain kalau bukan USDT). Formatnya JSON-encoded
+ * STRING per koin, contoh:
+ *   {"USDT":{"totalFee":"-0.0182",...},"newFees":{...}}
+ * "newFees" SENGAJA diabaikan — itu struktur summary internal Bitget, bukan
+ * breakdown fee per-koin yang sebenarnya.
+ *
+ * - Fee dibayar dalam quoteAsset (USDT) → dipakai langsung.
+ * - Fee dibayar dalam baseAsset (koin yang dibeli/dijual) → dikonversi pakai
+ *   fillPrice order yang bersangkutan.
+ * - Fee dibayar dalam koin lain (mis. BGB kalau fitur BGB deduction aktif di
+ *   akun) → TIDAK dikonversi (skip), karena butuh harga BGB/USDT terpisah —
+ *   lebih baik under-count daripada salah hitung. Matikan BGB deduction di
+ *   akun Bitget kalau mau akurasi fee 100% dari bot ini.
+ */
+export function extractFeeUsdt(orderDetail, { quoteAsset = 'USDT', baseAsset = null, fillPrice = null } = {}) {
+  if (!orderDetail?.feeDetail) return 0;
+
+  let parsed;
+  try {
+    parsed = typeof orderDetail.feeDetail === 'string' ? JSON.parse(orderDetail.feeDetail) : orderDetail.feeDetail;
+  } catch {
+    return 0;
+  }
+
+  let totalUsdt = 0;
+  for (const [coin, info] of Object.entries(parsed || {})) {
+    if (coin === 'newFees') continue; // struktur summary internal Bitget, bukan fee per-koin nyata
+    const raw = info?.totalFee;
+    if (raw === undefined || raw === null) continue;
+    const feeAmt = Math.abs(parseFloat(raw));
+    if (!feeAmt) continue;
+
+    if (coin === quoteAsset) {
+      totalUsdt += feeAmt;
+    } else if (baseAsset && coin === baseAsset && fillPrice) {
+      totalUsdt += feeAmt * fillPrice;
+    }
+    // fee dalam koin lain (BGB dll) sengaja dilewati — lihat komentar di atas.
+  }
+  return totalUsdt;
+}

@@ -40,13 +40,21 @@ async function buildDealsText() {
   const syms  = Object.keys(deals);
   if (!syms.length) return '📭 Tidak ada deal aktif.';
 
+  const feePct = config.trading.takerFeePercent ?? 0.1;
   let text = `📊 <b>Deal Aktif (${syms.length}):</b>\n\n`;
   for (const sym of syms) {
     const d   = deals[sym];
     const cur = await getCurrentPrice(sym).catch(() => null);
-    const pnl = cur ? ((cur - d.avgPrice) / d.avgPrice * 100) : null;
+    let pnl = null;
+    if (cur) {
+      const grossPnlUsdt   = (cur - d.avgPrice) * d.totalQty;
+      const buyFeeUsdt     = d.buyFeeUsdt || 0;
+      const estSellFeeUsdt = (cur * d.totalQty) * (feePct / 100);
+      const pnlUsdt        = grossPnlUsdt - buyFeeUsdt - estSellFeeUsdt;
+      pnl = d.totalSpent > 0 ? (pnlUsdt / d.totalSpent) * 100 : 0;
+    }
     text += `<b>${sym}</b>${d.tpHold ? ' ⏸ <i>TP HOLD</i>' : ''}\n`;
-    text += `  Avg: ${d.avgPrice.toFixed(6)} | Now: ${cur ?? '—'} | PnL: ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '—'}\n`;
+    text += `  Avg: ${d.avgPrice.toFixed(6)} | Now: ${cur ?? '—'} | PnL (net fee): ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '—'}\n`;
     text += `  SO terpakai: ${d.safetyOrdersFilled}/${config.dca.maxSafetyOrders} | Next SO @ ${d.nextSOPrice?.toFixed(6) ?? 'habis'}\n`;
     const slText = d.slPrice ? d.slPrice.toFixed(6) : (d.nextSOPrice !== null ? 'belum aktif (masih ada SO)' : '—');
     const tpText = (d.tpPriceBase != null && d.tpPriceAverage != null)

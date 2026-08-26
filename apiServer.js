@@ -87,12 +87,22 @@ async function handle(req, res) {
   if (route === '/api/status' && method === 'GET') {
     const stats = getStats();
     const deals = getActiveDeals();
+    const feePct = config.trading.takerFeePercent ?? 0.1; // dipakai utk estimasi fee jual (belum tereksekusi, jadi belum pasti)
     const enriched = {};
     for (const [sym, d] of Object.entries(deals)) {
       const price = await getCurrentPrice(sym).catch(() => null);
-      const pnlPct  = price ? ((price - d.avgPrice) / d.avgPrice * 100) : null;
-      const pnlUsdt = price ? ((price - d.avgPrice) * d.totalQty) : null;
-      enriched[sym] = { ...d, currentPrice: price, pnlPct, pnlUsdt, trendStatus: getTrendStatus(sym) };
+      const buyFeeUsdt = d.buyFeeUsdt || 0;
+      let pnlPct = null, pnlUsdt = null, grossPnlUsdt = null, estSellFeeUsdt = null;
+      if (price) {
+        grossPnlUsdt   = (price - d.avgPrice) * d.totalQty;
+        estSellFeeUsdt = (price * d.totalQty) * (feePct / 100); // ESTIMASI — fee jual pasti baru diketahui setelah order tereksekusi
+        pnlUsdt        = grossPnlUsdt - buyFeeUsdt - estSellFeeUsdt;
+        pnlPct          = d.totalSpent > 0 ? (pnlUsdt / d.totalSpent) * 100 : 0;
+      }
+      enriched[sym] = {
+        ...d, currentPrice: price, pnlPct, pnlUsdt, grossPnlUsdt, buyFeeUsdt, estSellFeeUsdt,
+        trendStatus: getTrendStatus(sym),
+      };
     }
     json(res, {
       ok: true,

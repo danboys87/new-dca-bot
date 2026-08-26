@@ -1,7 +1,7 @@
 /**
  * Executor — eksekusi order ke Bitget Spot (base order, safety order, close deal)
  */
-import { placeOrder, getOrder, getAssetBalance, getCurrentPrice, cancelOrder } from './bitget.js';
+import { placeOrder, getOrder, getAssetBalance, getCurrentPrice, cancelOrder, extractFeeUsdt } from './bitget.js';
 import { log, logTrade } from './logger.js';
 import {
   startDeal, addSafetyOrderFill, updateDealCalc, closeDeal, getDeal,
@@ -34,8 +34,12 @@ async function marketBuy(symbol, budget) {
   if (qty <= 0) throw new Error(`Quantity <= 0 untuk ${symbol}`);
 
   if (isDryRun) {
-    log('executor', `[DRY RUN] BUY ${symbol} qty=${qty} @ ${refPrice}`);
-    return { price: refPrice, qty, orderId: `dryrun_${Date.now()}` };
+    // Dry run: tidak ada order asli → fee disimulasikan pakai config.trading.takerFeePercent
+    // (default 0.1%), dihitung dari budget (USDT yang "dibelanjakan").
+    const feePct  = config.trading.takerFeePercent ?? 0.1;
+    const feeUsdt = budget * (feePct / 100);
+    log('executor', `[DRY RUN] BUY ${symbol} qty=${qty} @ ${refPrice} (fee simulasi ${feeUsdt.toFixed(4)} USDT)`);
+    return { price: refPrice, qty, orderId: `dryrun_${Date.now()}`, feeUsdt };
   }
 
   const usdtBalance = await getAssetBalance('USDT');
@@ -52,7 +56,12 @@ async function marketBuy(symbol, budget) {
   const fillPrice = detail ? parseFloat(detail.priceAvg || detail.fillPrice || refPrice) : refPrice;
   const fillQty   = detail ? parseFloat(detail.baseVolume || detail.fillSize || qty) : qty;
 
-  return { price: fillPrice, qty: fillQty, orderId };
+  const baseAsset = symbol.replace(config.trading.quoteAsset || 'USDT', '');
+  const feeUsdt = detail
+    ? extractFeeUsdt(detail, { quoteAsset: config.trading.quoteAsset || 'USDT', baseAsset, fillPrice })
+    : 0;
+
+  return { price: fillPrice, qty: fillQty, orderId, feeUsdt };
 }
 
 async function marketSellAll(symbol, quantity) {
@@ -60,8 +69,10 @@ async function marketSellAll(symbol, quantity) {
   if (!currentPrice) throw new Error(`Tidak bisa ambil harga ${symbol}`);
 
   if (isDryRun) {
-    log('executor', `[DRY RUN] SELL ${symbol} qty=${quantity} @ ${currentPrice}`);
-    return { price: currentPrice, qty: quantity };
+    const feePct  = config.trading.takerFeePercent ?? 0.1;
+    const feeUsdt = (currentPrice * quantity) * (feePct / 100);
+    log('executor', `[DRY RUN] SELL ${symbol} qty=${quantity} @ ${currentPrice} (fee simulasi ${feeUsdt.toFixed(4)} USDT)`);
+    return { price: currentPrice, qty: quantity, feeUsdt };
   }
 
   const baseAsset = symbol.replace(config.trading.quoteAsset || 'USDT', '');
@@ -76,7 +87,11 @@ async function marketSellAll(symbol, quantity) {
   const detail    = await getOrder(orderId, symbol).catch(() => null);
   const fillPrice = detail ? parseFloat(detail.priceAvg || currentPrice) : currentPrice;
 
-  return { price: fillPrice, qty: sellQty };
+  const feeUsdt = detail
+    ? extractFeeUsdt(detail, { quoteAsset: config.trading.quoteAsset || 'USDT', baseAsset, fillPrice })
+    : 0;
+
+  return { price: fillPrice, qty: sellQty, feeUsdt };
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -84,9 +99,9 @@ async function marketSellAll(symbol, quantity) {
 export async function openDeal(symbol) {
   const budget = config.dca.baseOrderSize;
   log('executor', `🚀 Membuka deal ${symbol} | base order = ${budget} USDT`);
-  const { price, qty, orderId } = await marketBuy(symbol, budget);
+  const { price, qty, orderId, feeUsdt } = await marketBuy(symbol, budget);
 
-  const deal = startDeal(symbol, { qty, price, budget, orderId });
+  const deal = startDeal(symbol, { qty, price, budget, orderId, feeUsdt });
   recalcDeal(deal, config.dca);
   updateDealCalc(symbol, deal);
 
@@ -96,9 +111,9 @@ export async function openDeal(symbol) {
 
 export async function fillSafetyOrder(symbol, step, budget) {
   log('executor', `➕ SO${step} ${symbol} | budget=${budget.toFixed(2)} USDT`);
-  const { price, qty, orderId } = await marketBuy(symbol, budget);
+  const { price, qty, orderId, feeUsdt } = await marketBuy(symbol, budget);
 
-  let deal = addSafetyOrderFill(symbol, { step, qty, price, budget, orderId });
+  let deal = addSafetyOrderFill(symbol, { step, qty, price, budget, orderId, feeUsdt });
   deal = recalcDeal(deal, config.dca);
   updateDealCalc(symbol, deal);
 
@@ -171,10 +186,15 @@ export async function checkLimitOrderFilled(orderId, symbol) {
   const filled = status === 'filled' || status === 'full_fill';
   if (!filled) return { filled: false };
 
+  const fillPrice = parseFloat(detail.priceAvg || detail.fillPrice);
+  const baseAsset  = symbol.replace(config.trading.quoteAsset || 'USDT', '');
+  const feeUsdt    = extractFeeUsdt(detail, { quoteAsset: config.trading.quoteAsset || 'USDT', baseAsset, fillPrice });
+
   return {
     filled: true,
-    price: parseFloat(detail.priceAvg || detail.fillPrice),
+    price: fillPrice,
     qty:   parseFloat(detail.baseVolume || detail.fillSize),
+    feeUsdt,
   };
 }
 
@@ -199,8 +219,8 @@ export async function cancelPendingLimitOrder(orderId, symbol) {
  * openDeal() tapi price/qty sudah diketahui dari hasil fill (bukan
  * marketBuy() baru), dipanggil dari processPendingLimitOrders().
  */
-export function finalizeBaseOrder(symbol, { qty, price, budget, orderId }) {
-  const deal = startDeal(symbol, { qty, price, budget, orderId });
+export function finalizeBaseOrder(symbol, { qty, price, budget, orderId, feeUsdt = 0 }) {
+  const deal = startDeal(symbol, { qty, price, budget, orderId, feeUsdt });
   recalcDeal(deal, config.dca);
   updateDealCalc(symbol, deal);
 
@@ -213,8 +233,8 @@ export async function closeDealMarket(symbol, reason) {
   if (!deal) throw new Error(`Deal ${symbol} tidak ditemukan`);
 
   log('executor', `🔻 Menutup deal ${symbol} | reason=${reason} | qty=${deal.totalQty}`);
-  const { price, qty } = await marketSellAll(symbol, deal.totalQty);
+  const { price, qty, feeUsdt } = await marketSellAll(symbol, deal.totalQty);
 
   logTrade({ side: 'sell', symbol, qty, price, tag: reason });
-  return closeDeal(symbol, { exitPrice: price, reason });
+  return closeDeal(symbol, { exitPrice: price, reason, feeUsdt });
 }

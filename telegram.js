@@ -57,11 +57,15 @@ export async function notifyDealClosed(closed) {
   const emoji = closed.pnlPct >= 0 ? '🟢' : '🔴';
   const sign  = closed.pnlPct >= 0 ? '+' : '';
   const labels = { take_profit: '🎯 Take Profit', stop_loss: '🛑 Stop Loss', manual_close: '🖐 Manual Close' };
+  const feeLine = closed.totalFeeUsdt
+    ? `Fee: ${closed.totalFeeUsdt.toFixed(4)} USDT (beli ${closed.buyFeeUsdt.toFixed(4)} + jual ${closed.sellFeeUsdt.toFixed(4)}) — sudah dipotong dari PnL\n`
+    : '';
   await send(
     `${emoji} <b>Deal Ditutup</b> — ${closed.symbol}\n` +
     `📌 ${labels[closed.reason] || closed.reason}\n` +
     `Avg entry: ${closed.avgPrice.toFixed(6)} → Exit: ${closed.exitPrice.toFixed(6)}\n` +
     `PnL: ${sign}${closed.pnlPct.toFixed(2)}% (${sign}${closed.pnlUsdt.toFixed(2)} USDT)\n` +
+    feeLine +
     `Safety order terpakai: ${closed.safetyOrdersFilled}`
   );
 }

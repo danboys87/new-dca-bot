@@ -208,6 +208,7 @@ async function processPendingLimitOrders() {
           price:   result.price ?? info.price,
           budget:  info.budget,
           orderId: info.orderId,
+          feeUsdt: result.feeUsdt ?? 0,
         });
         log('executor', `✅ Limit order terisi: ${symbol} @ ${deal.avgPrice}`);
         await notifyDealOpened(deal);

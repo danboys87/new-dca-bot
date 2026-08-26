@@ -137,7 +137,7 @@ tr.day-detail th{background:var(--surface)}
     </span>
   </div>
   <table>
-    <thead><tr><th>Symbol</th><th>Avg Entry</th><th>Now</th><th>PnL %</th><th>PnL USDT</th><th>SO</th><th>Next SO</th><th>TP</th><th>SL</th><th>Trend</th><th>Action</th></tr></thead>
+    <thead><tr><th>Symbol</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>SO</th><th>Next SO</th><th>TP</th><th>SL</th><th>Trend</th><th>Action</th></tr></thead>
     <tbody id="deals-body"><tr><td colspan="11" class="empty">Belum connect</td></tr></tbody>
   </table>
 </div>
@@ -369,12 +369,15 @@ function renderDeals(deals) {
       : '';
     const t = TREND_INFO[d.trendStatus] || { label: '— belum dicek', cls: 'gray' };
     const holdTag = d.tpHold ? '<br><span class="hold-tag">⏸ HOLD</span>' : '';
+    const pnlTitle = (d.buyFeeUsdt != null && d.estSellFeeUsdt != null)
+      ? `title="Sudah dikurangi fee beli aktual (${d.buyFeeUsdt.toFixed(4)} USDT) + estimasi fee jual (${d.estSellFeeUsdt.toFixed(4)} USDT, pakai rate config takerFeePercent — fee jual PASTI baru diketahui setelah order dieksekusi)"`
+      : '';
     return `<tr class="${d.tpHold ? 'tp-hold' : ''}">
       <td><b>${sym}</b></td>
       <td>${d.avgPrice?.toFixed(6)}</td>
       <td>${d.currentPrice ?? '—'}</td>
-      <td style="color:var(--${cls})">${sign}${d.pnlPct?.toFixed(2) ?? '—'}%</td>
-      <td style="color:var(--${cls})">${d.pnlUsdt != null ? (sign + d.pnlUsdt.toFixed(2) + ' USDT') : '—'}</td>
+      <td style="color:var(--${cls})" ${pnlTitle}>${sign}${d.pnlPct?.toFixed(2) ?? '—'}%</td>
+      <td style="color:var(--${cls})" ${pnlTitle}>${d.pnlUsdt != null ? (sign + d.pnlUsdt.toFixed(2) + ' USDT') : '—'}</td>
       <td>${d.safetyOrdersFilled}</td>
       <td>${d.nextSOPrice?.toFixed(6) ?? 'habis'}</td>
       <td style="color:var(--green)" ${tpTitle}>${d.tpPrice?.toFixed(6) ?? '—'}${holdTag}</td>
@@ -485,19 +488,21 @@ function buildDayDetailHtml(key) {
     const sign = !isUntracked && d.pnlPct >= 0 ? '+' : '';
     const cls  = !isUntracked && d.pnlPct >= 0 ? 'green' : 'red';
     const reasonText = REASON_LABEL[d.reason] || d.reason;
+    const feeText = isUntracked ? '—' : (d.totalFeeUsdt != null ? d.totalFeeUsdt.toFixed(4) + ' USDT' : '—');
     return `<tr class="${isUntracked ? 'untracked' : ''}">
       <td><b>${d.symbol}</b></td>
       <td>${d.avgPrice.toFixed(6)}</td>
       <td>${d.exitPrice != null ? d.exitPrice.toFixed(6) : '—'}</td>
       <td ${isUntracked ? '' : `style="color:var(--${cls})"`}>${isUntracked ? '—' : sign + d.pnlPct.toFixed(2) + '%'}</td>
       <td ${isUntracked ? '' : `style="color:var(--${cls})"`}>${isUntracked ? '— (manual)' : sign + d.pnlUsdt.toFixed(2) + ' USDT'}</td>
+      <td style="color:var(--muted)" title="Fee beli + jual, sudah dipotong dari PnL di kolom sebelah">${feeText}</td>
       <td>${d.safetyOrdersFilled}</td>
       <td>${reasonText}</td>
       <td style="font-size:10px">${new Date(d.closedAt).toLocaleString('id-ID')}</td>
     </tr>`;
   }).join('');
   return `<table>
-    <thead><tr><th>Symbol</th><th>Avg</th><th>Exit</th><th>PnL%</th><th>PnL USDT</th><th>SO</th><th>Reason</th><th>Waktu</th></tr></thead>
+    <thead><tr><th>Symbol</th><th>Avg</th><th>Exit</th><th>PnL%</th><th>PnL USDT (net fee)</th><th>Fee</th><th>SO</th><th>Reason</th><th>Waktu</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>`;
 }

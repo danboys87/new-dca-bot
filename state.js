@@ -47,7 +47,7 @@ export function getDeal(symbol)       { return _state.deals[symbol] || null; }
 export function getActiveDeals()      { return _state.deals; }
 export function getActiveSymbols()    { return Object.keys(_state.deals); }
 
-export function startDeal(symbol, { qty, price, budget, orderId }) {
+export function startDeal(symbol, { qty, price, budget, orderId, feeUsdt = 0 }) {
   const deal = {
     symbol,
     status:            'active',
@@ -61,23 +61,25 @@ export function startDeal(symbol, { qty, price, budget, orderId }) {
     tpPrice:           null,
     slPrice:           null,
     tpHold:            false, // TP Hold — kalau true, TP dilewati sementara (SO & SL tetap jalan normal)
+    buyFeeUsdt:        feeUsdt, // akumulasi fee BELI (base order + semua SO), dalam USDT
     openedAt:          new Date().toISOString(),
     orders: [
-      { tag: 'base', qty, price, budget, orderId, filledAt: new Date().toISOString() },
+      { tag: 'base', qty, price, budget, orderId, fee: feeUsdt, filledAt: new Date().toISOString() },
     ],
   };
   _state.deals[symbol] = deal;
   saveLocal(_state);
-  log('state', `📂 Deal dibuka: ${symbol} @ ${price} budget=${budget}`);
+  log('state', `📂 Deal dibuka: ${symbol} @ ${price} budget=${budget}${feeUsdt ? ` fee=${feeUsdt.toFixed(4)} USDT` : ''}`);
   return deal;
 }
 
-export function addSafetyOrderFill(symbol, { step, qty, price, budget, orderId }) {
+export function addSafetyOrderFill(symbol, { step, qty, price, budget, orderId, feeUsdt = 0 }) {
   const deal = _state.deals[symbol];
   if (!deal) return null;
-  deal.orders.push({ tag: `so${step}`, qty, price, budget, orderId, filledAt: new Date().toISOString() });
+  deal.orders.push({ tag: `so${step}`, qty, price, budget, orderId, fee: feeUsdt, filledAt: new Date().toISOString() });
+  deal.buyFeeUsdt = (deal.buyFeeUsdt || 0) + feeUsdt;
   saveLocal(_state);
-  log('state', `➕ SO${step} terisi: ${symbol} @ ${price} budget=${budget}`);
+  log('state', `➕ SO${step} terisi: ${symbol} @ ${price} budget=${budget}${feeUsdt ? ` fee=${feeUsdt.toFixed(4)} USDT` : ''}`);
   return deal;
 }
 
@@ -107,13 +109,22 @@ export function setTpHold(symbol, hold) {
  * Close deal DENGAN harga exit asli (TP/SL/Manual Close via bot).
  * pnlUsdt hasil deal ini SENGAJA ditambahkan ke compoundingPool — itu "profit"
  * (atau rugi, kalau negatif) yang jadi basis fitur compounding.
+ *
+ * pnlUsdt SEKARANG SUDAH DIKURANGI FEE (beli semua order + jual) — fee beli
+ * diakumulasi tiap kali order terisi (lihat startDeal/addSafetyOrderFill),
+ * fee jual (feeUsdt param) datang dari closeDealMarket() di executor.js.
+ * pnlPct sekarang dihitung sebagai ROI terhadap modal (totalSpent), BUKAN
+ * cuma selisih harga murni — supaya representatif dgn pnlUsdt yang net-fee.
  */
-export function closeDeal(symbol, { exitPrice, reason }) {
+export function closeDeal(symbol, { exitPrice, reason, feeUsdt: sellFeeUsdt = 0 }) {
   const deal = _state.deals[symbol];
   if (!deal) return null;
 
-  const pnlUsdt = (exitPrice - deal.avgPrice) * deal.totalQty;
-  const pnlPct  = ((exitPrice - deal.avgPrice) / deal.avgPrice) * 100;
+  const grossPnlUsdt = (exitPrice - deal.avgPrice) * deal.totalQty;
+  const buyFeeUsdt    = deal.buyFeeUsdt || 0;
+  const totalFeeUsdt  = buyFeeUsdt + sellFeeUsdt;
+  const pnlUsdt = grossPnlUsdt - totalFeeUsdt;
+  const pnlPct  = deal.totalSpent > 0 ? (pnlUsdt / deal.totalSpent) * 100 : 0;
 
   const closed = {
     ...deal,
@@ -121,8 +132,12 @@ export function closeDeal(symbol, { exitPrice, reason }) {
     exitPrice,
     closedAt:  new Date().toISOString(),
     reason,
-    pnlUsdt,
-    pnlPct,
+    grossPnlUsdt, // PnL SEBELUM dikurangi fee — disimpan utk referensi/transparansi
+    buyFeeUsdt,
+    sellFeeUsdt,
+    totalFeeUsdt,
+    pnlUsdt,       // PnL BERSIH — sudah dikurangi fee beli + jual
+    pnlPct,        // ROI bersih terhadap modal (totalSpent), sudah termasuk fee
   };
 
   _state.closedDeals.push(closed);
