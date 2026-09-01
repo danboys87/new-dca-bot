@@ -16,16 +16,20 @@ import {
   getCompoundingNotified, setCompoundingNotified,
   schedulePendingEntry, clearPendingEntry, getPendingEntries, hasPendingEntry,
   schedulePendingLimitEntry, clearPendingLimitEntry, getPendingLimitEntries, hasPendingLimitEntry,
+  getActivePositionSymbols, getPosition, getActivePositions, hasActivePosition,
+  activatePositionTrailing, updatePositionPeak, getClosedPositions, getPositionStats,
 } from './state.js';
 import { evaluateDeal } from './dcaEngine.js';
+import { evaluatePosition, calcTrailingStopPrice } from './positionEngine.js';
 import {
   openDeal, openDealLimit, checkLimitOrderFilled, cancelPendingLimitOrder, finalizeBaseOrder,
-  fillSafetyOrder, closeDealMarket,
+  fillSafetyOrder, closeDealMarket, openOrAddPosition, closePositionMarket,
 } from './executor.js';
 import {
   notifyDealOpened, notifySafetyOrder, notifyDealClosed, notifyDealUntracked, notifyError, notifyStartup,
   notifyCompoundingAvailable, notifyCompoundingApplied, notifyEntryPending, notifyEntryCancelled,
   notifyLimitOrderPlaced, notifyLimitOrderCancelled,
+  notifyPositionEntry, notifyPositionTrailingActivated, notifyPositionClosed,
 } from './telegram.js';
 import { startTelegramPolling, stopTelegramPolling } from './telegramCommands.js';
 import { startApiServer } from './apiServer.js';
@@ -400,6 +404,95 @@ export async function closeDealUntrack(symbol) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MANUAL POSITION (DILUAR DCA) — entry manual + trailing stop
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Entry manual ke Manual Position — budget WAJIB diisi user (tidak ada auto-sizing
+ * seperti DCA). Kalau belum ada posisi aktif utk symbol ini, ini jadi entry
+ * PERTAMA (buka posisi baru). Kalau sudah ada, jadi entry TAMBAHAN.
+ */
+export async function addPosition(symbol, budget) {
+  if (!budget || !(budget > 0)) return { ok: false, error: `Budget tidak valid: ${budget}` };
+  try {
+    const position = await openOrAddPosition(symbol, budget);
+    await notifyPositionEntry(position);
+    return { ok: true, position };
+  } catch (e) {
+    log('executor_error', `Gagal entry position ${symbol}: ${e.message}`);
+    await notifyError(`Gagal entry position ${symbol}: ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+export async function closePositionManual(symbol) {
+  if (!hasActivePosition(symbol)) return { ok: false, error: `Position ${symbol} tidak aktif` };
+  try {
+    const closed = await closePositionMarket(symbol, 'manual_close');
+    await notifyPositionClosed(closed);
+    return { ok: true, closed };
+  } catch (e) {
+    log('executor_error', `Tutup position ${symbol} gagal: ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+export function positionStats() {
+  return getPositionStats();
+}
+
+/**
+ * Loop evaluasi Manual Position — dipanggil bareng checkDeals() di interval
+ * yang sama (checkIntervalSec). Terpisah total dari logic DCA (dcaEngine.js).
+ */
+async function checkPositions() {
+  const symbols = getActivePositionSymbols();
+
+  for (const symbol of symbols) {
+    const position = getPosition(symbol);
+    if (!position) continue;
+
+    try {
+      const price = await getCurrentPrice(symbol);
+      if (!price) continue;
+
+      const decision = evaluatePosition(position, price);
+
+      if (decision.action === 'stop_loss') {
+        log('position', `🛑 SL hit: ${symbol} @ ${price} (SL=${position.slPrice.toFixed(6)})`);
+        const closed = await closePositionMarket(symbol, 'stop_loss');
+        await notifyPositionClosed(closed);
+
+      } else if (decision.action === 'activate_trailing') {
+        const trailingStopPrice = calcTrailingStopPrice(decision.peakPrice, position.trailingStopPercent);
+        const updated = activatePositionTrailing(symbol, decision.peakPrice, trailingStopPrice);
+        log('position', `🔔 Trailing Stop AKTIF: ${symbol} @ peak=${decision.peakPrice} (trailing stop @ ${trailingStopPrice.toFixed(6)})`);
+        await notifyPositionTrailingActivated(updated);
+
+      } else if (decision.action === 'update_peak') {
+        const trailingStopPrice = calcTrailingStopPrice(decision.peakPrice, position.trailingStopPercent);
+        updatePositionPeak(symbol, decision.peakPrice, trailingStopPrice); // silent, no notif — biar gak spam tiap harga naik dikit
+
+      } else if (decision.action === 'trailing_stop') {
+        log('position', `📉 Trailing Stop hit: ${symbol} @ ${price} (peak=${position.peakPrice})`);
+        const closed = await closePositionMarket(symbol, 'trailing_stop');
+        await notifyPositionClosed(closed);
+
+      } else {
+        const trailLog = position.trailingActive
+          ? `TRAILING ON peak=${position.peakPrice.toFixed(6)} stop=${position.trailingStopPrice.toFixed(6)}`
+          : `trailing OFF (aktif di atas ${(position.avgPrice * (1 + position.trailingActivationPercent / 100)).toFixed(6)})`;
+        log('position', `  ${symbol} | price=${price} avg=${position.avgPrice.toFixed(6)} SL=${position.slPrice?.toFixed(6) ?? '—'} | ${trailLog}`);
+      }
+    } catch (err) {
+      log('position_error', `Evaluasi position ${symbol} gagal: ${err.message}`);
+    }
+
+    await sleep(300);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN LOOP — cek tiap deal aktif, jalankan SO / TP / SL sesuai dcaEngine
 // ─────────────────────────────────────────────────────────────────────────────
 async function checkDeals() {
@@ -461,6 +554,7 @@ async function checkDeals() {
     await processPendingReopens();
     await processPendingEntries();
     await processPendingLimitOrders();
+    await checkPositions();
   } finally {
     _loopBusy = false;
   }
@@ -556,6 +650,19 @@ async function showStatus() {
   console.log(`  Entry Order : ${(config.trading.entryOrderType ?? 'market').toUpperCase()}${config.trading.entryOrderType === 'limit' ? ` (offset -${config.trading.entryLimitOffsetPercent ?? 0.1}%, timeout ${config.trading.entryLimitTimeoutMin ?? 15}m)` : ''}`);
   const cs = compoundStatus();
   console.log(`  Compounding : ${cs.enabled ? `pool=${cs.pool.toFixed(2)}/${cs.threshold} USDT ${cs.ready ? '(siap!)' : ''}` : 'OFF'}`);
+
+  const positions = getActivePositions();
+  const posSyms = Object.keys(positions);
+  const ps = positionStats();
+  console.log(`\n  ── Manual Position (di luar DCA) ──`);
+  console.log(`  Aktif       : ${ps.activePositions} | Closed: ${ps.closedCount} | Total PnL: ${ps.totalPnlUsdt >= 0 ? '+' : ''}${ps.totalPnlUsdt.toFixed(2)} USDT`);
+  for (const [symbol, p] of Object.entries(positions)) {
+    const price = await getCurrentPrice(symbol).catch(() => null);
+    const pnl   = price && p.totalSpent > 0 ? (((price - p.avgPrice) * p.totalQty - (p.buyFeeUsdt || 0)) / p.totalSpent * 100) : null;
+    console.log(`\n  ${symbol}${p.trailingActive ? ' 🔔 TRAILING' : ''}`);
+    console.log(`    avg=${p.avgPrice.toFixed(6)} now=${price ?? '—'} PnL=${pnl !== null ? pnl.toFixed(2) + '%' : '—'}`);
+    console.log(`    SL=${p.slPrice?.toFixed(6) ?? '—'} | ${p.trailingActive ? `peak=${p.peakPrice.toFixed(6)} trailingStop=${p.trailingStopPrice.toFixed(6)}` : `aktivasi trailing di atas ${(p.avgPrice * (1 + p.trailingActivationPercent / 100)).toFixed(6)}`}`);
+  }
   console.log('══════════════════════════════════════\n');
 }
 
@@ -564,7 +671,7 @@ async function showStatus() {
 // ─────────────────────────────────────────────────────────────────────────────
 function startREPL() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '\n[dca-bot] > ' });
-  console.log('\n📖 Perintah: status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | stop | help\n');
+  console.log('\n📖 Perintah: status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | addposition SYMBOL BUDGET | closeposition SYMBOL | positions | stop | help\n');
   rl.prompt();
 
   rl.on('line', async (line) => {
@@ -607,9 +714,21 @@ function startREPL() {
         saveConfig({ trading: { reopenAfterClose: arg.toLowerCase() === 'on' } });
         console.log(`🔁 Auto Reopen sekarang: ${config.trading.reopenAfterClose ? 'ON' : 'OFF'}`);
         break;
+      case 'addposition': {
+        if (!arg || !arg2) { console.log('Format: addposition SYMBOL BUDGET  (mis. addposition BTCUSDT 20)'); break; }
+        const budget = parseFloat(arg2);
+        if (!(budget > 0)) { console.log(`Budget tidak valid: ${arg2}`); break; }
+        console.log(await addPosition(arg.toUpperCase(), budget));
+        break;
+      }
+      case 'closeposition':
+        if (!arg) { console.log('Format: closeposition SYMBOL'); break; }
+        console.log(await closePositionManual(arg.toUpperCase())); break;
+      case 'positions':
+        console.log(getActivePositions()); break;
       case 'stop': stopLoop(); stopTrendLoop(); stopTelegramPolling(); process.exit(0); break;
       case 'help':
-        console.log('  status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | stop'); break;
+        console.log('  status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | addposition SYMBOL BUDGET | closeposition SYMBOL | positions | stop'); break;
       default: console.log(`❓ Perintah tidak dikenal: "${cmd}"`);
     }
     rl.prompt();
@@ -656,11 +775,13 @@ async function main() {
   startTelegramPolling({
     startDeal, closeDealManual, closeDealUntrack, holdTP, resumeTP,
     compoundNow, compoundStatus, cancelPendingEntry, cancelPendingLimitEntry,
+    addPosition, closePositionManual, positionStats,
   });
 
   startApiServer({
     startDeal, closeDealManual, closeDealUntrack, holdTP, resumeTP,
     compoundNow, compoundStatus, cancelPendingEntry, cancelPendingLimitEntry,
+    addPosition, closePositionManual, positionStats,
   });
 
   if (process.stdin.isTTY) startREPL();

@@ -2,7 +2,7 @@
  * Telegram Command Handler — DCA Bot
  */
 import { log } from './logger.js';
-import { getStats, getActiveDeals, getDeal, getClosedDeals, getActiveSymbols, getPendingEntries, getPendingLimitEntries } from './state.js';
+import { getStats, getActiveDeals, getDeal, getClosedDeals, getActiveSymbols, getPendingEntries, getPendingLimitEntries, getActivePositions } from './state.js';
 import { getCurrentPrice } from './bitget.js';
 import { config, saveConfig } from './config.js';
 import { analyzeTrend } from './trendMonitor.js';
@@ -296,6 +296,49 @@ async function handleCommand(chatId, text, callbacks) {
       break;
     }
 
+    case '/addposition': {
+      if (!arg || !parts[2]) { await reply(chatId, '❓ Format: /addposition SYMBOL BUDGET\nContoh: /addposition BTCUSDT 20\n\nBisa dipanggil berkali-kali di symbol yang sama — tiap panggilan jadi entry TAMBAHAN (avg price di-recalculate).'); break; }
+      const budget = parseFloat(parts[2]);
+      if (!(budget > 0)) { await reply(chatId, `❓ Budget tidak valid: ${parts[2]}`); break; }
+      await reply(chatId, `⏳ Entry ${arg} sebesar ${budget} USDT...`);
+      try {
+        const res = await callbacks.addPosition(arg, budget);
+        await reply(chatId, res.ok ? `✅ Entry ${arg} berhasil. Avg price sekarang: ${res.position.avgPrice.toFixed(6)}` : `❌ ${res.error}`);
+      } catch (e) { await reply(chatId, `❌ Error: ${e.message}`); }
+      break;
+    }
+
+    case '/closeposition': {
+      if (!arg) { await reply(chatId, '❓ Format: /closeposition SYMBOL'); break; }
+      await reply(chatId, `⏳ Menutup position ${arg} (market sell)...`);
+      try {
+        const res = await callbacks.closePositionManual(arg);
+        await reply(chatId, res.ok ? `✅ Position ${arg} ditutup.` : `❌ ${res.error}`);
+      } catch (e) { await reply(chatId, `❌ Error: ${e.message}`); }
+      break;
+    }
+
+    case '/positions': {
+      const positions = getActivePositions();
+      const syms = Object.keys(positions);
+      if (!syms.length) { await reply(chatId, '📭 Tidak ada Manual Position aktif.'); break; }
+
+      let text = `📊 <b>Manual Position Aktif (${syms.length}):</b>\n\n`;
+      for (const sym of syms) {
+        const p = positions[sym];
+        const cur = await getCurrentPrice(sym).catch(() => null);
+        const pnl = (cur && p.totalSpent > 0) ? (((cur - p.avgPrice) * p.totalQty - (p.buyFeeUsdt || 0)) / p.totalSpent * 100) : null;
+        text += `<b>${sym}</b>${p.trailingActive ? ' 🔔 <i>TRAILING</i>' : ''}\n`;
+        text += `  Avg: ${p.avgPrice.toFixed(6)} | Now: ${cur ?? '—'} | PnL: ${pnl !== null ? (pnl >= 0 ? '+' : '') + pnl.toFixed(2) + '%' : '—'}\n`;
+        text += `  Entry ke-${p.entries.length} | SL: ${p.slPrice?.toFixed(6) ?? '—'}\n`;
+        text += p.trailingActive
+          ? `  Peak: ${p.peakPrice.toFixed(6)} | Trailing Stop: ${p.trailingStopPrice.toFixed(6)}\n\n`
+          : `  Trailing aktif di atas: ${(p.avgPrice * (1 + p.trailingActivationPercent / 100)).toFixed(6)}\n\n`;
+      }
+      await reply(chatId, text.trim());
+      break;
+    }
+
     case '/help':
     default: {
       await reply(chatId,
@@ -313,7 +356,11 @@ async function handleCommand(chatId, text, callbacks) {
         `/config           — lihat setting DCA saat ini\n` +
         `/trend [SYMBOL]   — cek status tren (kosongkan utk semua deal aktif)\n` +
         `/compound [apply] — cek status profit terkumpul / terapkan compounding\n` +
-        `/reopen on|off    — toggle auto-reopen setelah TP`
+        `/reopen on|off    — toggle auto-reopen setelah TP\n\n` +
+        `<b>Manual Position (di luar DCA):</b>\n` +
+        `/addposition SYMBOL BUDGET — entry manual (bisa berkali-kali utk symbol sama)\n` +
+        `/closeposition SYMBOL — tutup position manual\n` +
+        `/positions — lihat semua Manual Position aktif`
       );
       break;
     }

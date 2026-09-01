@@ -19,6 +19,8 @@ function loadLocal() {
       if (!s.trendStatus)        s.trendStatus        = {}; // backward-compat state.json lama
       if (!s.pendingEntries)     s.pendingEntries     = {}; // backward-compat state.json lama
       if (!s.pendingLimitEntries) s.pendingLimitEntries = {}; // backward-compat state.json lama
+      if (!s.positions)          s.positions          = {}; // backward-compat state.json lama — Manual Position (di luar DCA)
+      if (!s.closedPositions)    s.closedPositions    = []; // backward-compat state.json lama
       if (s.compoundingPool === undefined)    s.compoundingPool    = 0;
       if (s.compoundingNotified === undefined) s.compoundingNotified = false;
       return s;
@@ -29,6 +31,7 @@ function loadLocal() {
   return {
     deals: {}, closedDeals: [], totalPnlUsdt: 0, pendingReopens: {}, trendStatus: {},
     compoundingPool: 0, compoundingNotified: false, pendingEntries: {}, pendingLimitEntries: {},
+    positions: {}, closedPositions: [],
   };
 }
 
@@ -261,6 +264,142 @@ export function getStats() {
 
 export function getClosedDeals(limit = 50) {
   return _state.closedDeals.slice(-limit).reverse();
+}
+
+// ── Manual Position (DILUAR DCA) — entry manual + trailing stop ────────────
+// State SEPENUHNYA terpisah dari _state.deals — 1 symbol bisa punya DCA deal
+// DAN Manual Position sekaligus tanpa saling mengganggu.
+
+export function hasActivePosition(symbol) { return !!_state.positions[symbol]; }
+export function getPosition(symbol)       { return _state.positions[symbol] || null; }
+export function getActivePositions()      { return _state.positions; }
+export function getActivePositionSymbols(){ return Object.keys(_state.positions); }
+
+/**
+ * Buka posisi manual baru (entry pertama). stopLossPercent/trailingActivationPercent/
+ * trailingStopPercent "dikunci" saat posisi dibuka (dari config.position saat itu) —
+ * ganti config setelahnya TIDAK mempengaruhi posisi yang sudah berjalan.
+ */
+export function startPosition(symbol, { qty, price, budget, orderId, feeUsdt = 0, stopLossPercent, trailingActivationPercent, trailingStopPercent }) {
+  const position = {
+    symbol,
+    status: 'active',
+    totalQty: qty,
+    totalSpent: qty * price,
+    avgPrice: price,
+    buyFeeUsdt: feeUsdt,
+    stopLossPercent,
+    slPrice: null, // dihitung lewat recalcPosition() di executor.js
+    trailingActivationPercent,
+    trailingStopPercent,
+    trailingActive: false,
+    peakPrice: null,
+    trailingStopPrice: null,
+    openedAt: new Date().toISOString(),
+    entries: [
+      { qty, price, budget, orderId, fee: feeUsdt, filledAt: new Date().toISOString() },
+    ],
+  };
+  _state.positions[symbol] = position;
+  saveLocal(_state);
+  log('state', `🚀 Position dibuka: ${symbol} @ ${price} budget=${budget}`);
+  return position;
+}
+
+/**
+ * Entry tambahan MANUAL — kapan saja, harga apa saja (hasil beli aktual).
+ * avgPrice/qty/SL di-recalculate di executor.js (recalcPosition). Status
+ * trailing (aktif/peak) TIDAK direset oleh entry tambahan.
+ */
+export function addPositionEntry(symbol, { qty, price, budget, orderId, feeUsdt = 0 }) {
+  const position = _state.positions[symbol];
+  if (!position) return null;
+  position.entries.push({ qty, price, budget, orderId, fee: feeUsdt, filledAt: new Date().toISOString() });
+  position.buyFeeUsdt = (position.buyFeeUsdt || 0) + feeUsdt;
+  saveLocal(_state);
+  log('state', `➕ Entry tambahan: ${symbol} @ ${price} budget=${budget}`);
+  return position;
+}
+
+export function updatePositionCalc(symbol, patch) {
+  const position = _state.positions[symbol];
+  if (!position) return null;
+  Object.assign(position, patch);
+  saveLocal(_state);
+  return position;
+}
+
+/**
+ * Aktifkan trailing stop pertama kali (harga baru saja nyentuh titik aktivasi).
+ */
+export function activatePositionTrailing(symbol, peakPrice, trailingStopPrice) {
+  const position = _state.positions[symbol];
+  if (!position) return null;
+  position.trailingActive = true;
+  position.peakPrice = peakPrice;
+  position.trailingStopPrice = trailingStopPrice;
+  saveLocal(_state);
+  log('state', `🔔 Trailing Stop AKTIF: ${symbol} @ peak=${peakPrice}`);
+  return position;
+}
+
+/**
+ * Update peakPrice begitu harga bikin rekor baru (trailing sudah aktif).
+ */
+export function updatePositionPeak(symbol, peakPrice, trailingStopPrice) {
+  const position = _state.positions[symbol];
+  if (!position) return null;
+  position.peakPrice = peakPrice;
+  position.trailingStopPrice = trailingStopPrice;
+  saveLocal(_state);
+  return position;
+}
+
+/**
+ * Close posisi manual (Stop Loss, Trailing Stop, atau Close manual via user).
+ */
+export function closePosition(symbol, { exitPrice, reason, feeUsdt: sellFeeUsdt = 0 }) {
+  const position = _state.positions[symbol];
+  if (!position) return null;
+
+  const grossPnlUsdt = (exitPrice - position.avgPrice) * position.totalQty;
+  const buyFeeUsdt    = position.buyFeeUsdt || 0;
+  const totalFeeUsdt  = buyFeeUsdt + sellFeeUsdt;
+  const pnlUsdt = grossPnlUsdt - totalFeeUsdt;
+  const pnlPct  = position.totalSpent > 0 ? (pnlUsdt / position.totalSpent) * 100 : 0;
+
+  const closed = {
+    ...position,
+    status: 'closed',
+    exitPrice,
+    closedAt: new Date().toISOString(),
+    reason,
+    grossPnlUsdt,
+    buyFeeUsdt,
+    sellFeeUsdt,
+    totalFeeUsdt,
+    pnlUsdt,
+    pnlPct,
+  };
+
+  _state.closedPositions.push(closed);
+  delete _state.positions[symbol];
+  saveLocal(_state);
+
+  log('state', `📁 Position ditutup: ${symbol} @ ${exitPrice} | PnL=${pnlPct.toFixed(2)}% (${pnlUsdt >= 0 ? '+' : ''}${pnlUsdt.toFixed(2)} USDT) | reason=${reason}`);
+  return closed;
+}
+
+export function getClosedPositions(limit = 50) {
+  return _state.closedPositions.slice(-limit).reverse();
+}
+
+export function getPositionStats() {
+  return {
+    activePositions: Object.keys(_state.positions).length,
+    closedCount: _state.closedPositions.length,
+    totalPnlUsdt: _state.closedPositions.reduce((s, p) => s + (p.pnlUsdt || 0), 0),
+  };
 }
 
 export function reload() { _state = loadLocal(); }

@@ -14,8 +14,8 @@
     "reopenRetryDelayMin": 5,
     "_comment_trend": "Trend Monitor: status ditentukan dari posisi harga terhadap 1 garis EMA (trendEmaPeriod) di timeframe trendTimeframe. Harga > EMA = Bullish, harga < EMA = Bearish. Dicek tiap trendCheckIntervalMin menit, utk semua symbol yang sedang punya deal aktif. INFORMATIF SAJA lewat notifikasi Telegram saat status berubah — tidak mempengaruhi SO/TP/SL. Bisa juga dicek manual kapan saja lewat /trend SYMBOL di Telegram atau tombol ↻ di dashboard.",
     "trendEmaPeriod": 21,
-    "trendTimeframe": "4h",
-    "trendCheckIntervalMin": 60,
+    "trendTimeframe": "1h",
+    "trendCheckIntervalMin": 30,
     "_comment_entryFilter": "Entry Filter: OPSIONAL, default OFF. BEDA dari Trend Monitor — ini AKTIF MEMBLOKIR entry BARU (base order) kalau harga masih di bawah EMA(entryFilterEmaPeriod) di timeframe entryFilterTimeframe. Deal yang gagal syarat ditaruh 'pending' dan otomatis dibuka begitu harga naik di atas EMA (dicek tiap loop checkIntervalSec). Fail-open: kalau data candle gak cukup, entry tetap diizinkan (bukan diblokir selamanya). Berlaku juga utk auto-reopen (bukan cuma entry manual).",
     "entryFilterEnabled": false,
     "entryFilterEmaPeriod": 9,
@@ -44,6 +44,14 @@
     "stopLossEnabled": false,
     "stopLossPercent": 15,
     "stopLossBasis": "average"
+  },
+  "position": {
+    "_comment": "Manual Position — DILUAR DCA. Entry SEPENUHNYA manual (kamu yang tentukan kapan & berapa besar tiap entry, bisa berkali-kali, harga apa saja — bukan aturan safety order DCA). TIDAK ada Take Profit tetap — exit HANYA lewat Trailing Stop, Stop Loss tetap, atau close manual. Nilai di sini jadi DEFAULT saat posisi baru dibuka (entry pertama di suatu symbol); begitu posisi sudah berjalan, ganti config ini TIDAK mempengaruhi posisi yang sedang aktif.",
+    "_comment_stopLoss": "Stop Loss TETAP — basis avgPrice, aktif SEPANJANG WAKTU sejak entry pertama (beda dari DCA yg SL-nya baru aktif setelah SO habis). Proteksi kalau harga anjlok duluan sebelum sempat naik ke titik aktivasi trailing.",
+    "stopLossPercent": 10,
+    "_comment_trailing": "Trailing Stop BELUM aktif sampai harga naik trailingActivationPercent% dari avgPrice. Begitu aktif, bot 'mengikuti' harga tertinggi (peak) — kalau harga turun trailingStopPercent% dari peak, posisi otomatis ditutup (mengunci profit).",
+    "trailingActivationPercent": 3,
+    "trailingStopPercent": 2
   },
   "whitelist": [],
   "blacklist": [

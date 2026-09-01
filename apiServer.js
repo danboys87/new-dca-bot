@@ -7,7 +7,7 @@ import path   from 'path';
 import { fileURLToPath } from 'url';
 import { log }             from './logger.js';
 import { getCurrentPrice } from './bitget.js';
-import { getStats, getActiveDeals, getClosedDeals, getTrendStatus, getPendingEntries, getPendingLimitEntries } from './state.js';
+import { getStats, getActiveDeals, getClosedDeals, getTrendStatus, getPendingEntries, getPendingLimitEntries, getActivePositions, getClosedPositions } from './state.js';
 import { config, saveConfig } from './config.js';
 import { analyzeTrend } from './trendMonitor.js';
 
@@ -104,13 +104,31 @@ async function handle(req, res) {
         trendStatus: getTrendStatus(sym),
       };
     }
+
+    // Manual Position (DILUAR DCA) — enrichment PnL live sama pola dgn deal DCA di atas.
+    const positions = getActivePositions();
+    const enrichedPositions = {};
+    for (const [sym, p] of Object.entries(positions)) {
+      const price = await getCurrentPrice(sym).catch(() => null);
+      const buyFeeUsdt = p.buyFeeUsdt || 0;
+      let pnlPct = null, pnlUsdt = null, grossPnlUsdt = null, estSellFeeUsdt = null;
+      if (price) {
+        grossPnlUsdt   = (price - p.avgPrice) * p.totalQty;
+        estSellFeeUsdt = (price * p.totalQty) * (feePct / 100);
+        pnlUsdt        = grossPnlUsdt - buyFeeUsdt - estSellFeeUsdt;
+        pnlPct         = p.totalSpent > 0 ? (pnlUsdt / p.totalSpent) * 100 : 0;
+      }
+      enrichedPositions[sym] = { ...p, currentPrice: price, pnlPct, pnlUsdt, grossPnlUsdt, buyFeeUsdt, estSellFeeUsdt };
+    }
+
     json(res, {
       ok: true,
       stats,
       deals: enriched,
+      positions: enrichedPositions,
       pendingEntries: getPendingEntries(),
       pendingLimitEntries: getPendingLimitEntries(),
-      config: { dca: config.dca, trading: config.trading, isDryRun: process.env.DRY_RUN === 'true' },
+      config: { dca: config.dca, trading: config.trading, position: config.position, isDryRun: process.env.DRY_RUN === 'true' },
       serverTime: new Date().toISOString(),
     });
     return;
@@ -235,6 +253,32 @@ async function handle(req, res) {
     if (!symbol) { err(res, 'symbol required'); return; }
     try { json(res, _callbacks.resumeTP(symbol.toUpperCase())); }
     catch (e) { err(res, e.message); }
+    return;
+  }
+
+  // ── Manual Position (DILUAR DCA) ────────────────────────────────────────
+  if (route === '/api/position/add' && method === 'POST') {
+    const { symbol, budget } = await readBody(req);
+    if (!symbol) { err(res, 'symbol required'); return; }
+    const parsedBudget = parseFloat(budget);
+    if (!(parsedBudget > 0)) { err(res, 'budget tidak valid'); return; }
+    try { json(res, await _callbacks.addPosition(symbol.toUpperCase(), parsedBudget)); }
+    catch (e) { err(res, e.message); }
+    return;
+  }
+
+  if (route === '/api/position/close' && method === 'POST') {
+    const { symbol } = await readBody(req);
+    if (!symbol) { err(res, 'symbol required'); return; }
+    try { json(res, await _callbacks.closePositionManual(symbol.toUpperCase())); }
+    catch (e) { err(res, e.message); }
+    return;
+  }
+
+  if (route === '/api/position/history' && method === 'GET') {
+    const requested = parseInt(url.searchParams.get('limit') || '200');
+    const limit = Math.min(Math.max(requested || 200, 1), 2000);
+    json(res, { ok: true, positions: getClosedPositions(limit) });
     return;
   }
 

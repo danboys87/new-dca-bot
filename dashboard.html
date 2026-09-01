@@ -61,12 +61,55 @@ tr.day-detail th{background:var(--surface)}
 .compound-item .label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .compound-item .value{font-family:var(--mono);font-size:16px}
 .hold-tag{font-size:10px;color:var(--yellow);font-weight:600}
+
+/* ── Sidebar layout ─────────────────────────────────────────────────── */
+.app-shell{display:flex;min-height:100vh}
+.sidebar{width:200px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);padding:18px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-brand{font-family:var(--mono);font-size:14px;font-weight:500;padding:0 18px 18px;border-bottom:1px solid var(--border);margin-bottom:14px}
+.nav-section{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:14px 18px 6px}
+.nav-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 18px;border:none;background:none;font-family:var(--sans);font-size:12.5px;color:var(--text);cursor:pointer;border-left:3px solid transparent}
+.nav-item:hover{background:var(--bg)}
+.nav-item.active{background:var(--bg);border-left-color:var(--text);font-weight:600}
+.nav-icon{width:14px;text-align:center;font-size:12px}
+.main{flex:1;min-width:0;padding:20px;max-width:1260px}
+.page{display:none}
+.page.active{display:block}
+.log-box{background:#1a1916;color:#d6d3c9;font-family:var(--mono);font-size:11px;line-height:1.6;padding:14px;border-radius:var(--radius);white-space:pre-wrap;word-break:break-all;max-height:70vh;overflow-y:auto}
+@media (max-width: 760px){
+  .app-shell{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:relative;padding:10px 0;display:flex;flex-wrap:wrap;align-items:center}
+  .sidebar-brand{border-bottom:none;padding:0 14px;margin-bottom:0;width:100%}
+  .nav-section{display:none}
+  .nav-item{width:auto;padding:8px 12px;border-left:none;border-bottom:3px solid transparent}
+  .nav-item.active{border-left:none;border-bottom-color:var(--text)}
+  .main{max-width:100%}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="app-shell">
+<aside class="sidebar">
+  <div class="sidebar-brand">▣ DCA BOT</div>
+
+  <div class="nav-section">Monitor</div>
+  <button class="nav-item active" data-page="overview" onclick="switchPage('overview')"><span class="nav-icon">◈</span> Overview</button>
+  <button class="nav-item" data-page="deals" onclick="switchPage('deals')"><span class="nav-icon">📂</span> DCA Deals</button>
+  <button class="nav-item" data-page="pending" onclick="switchPage('pending')"><span class="nav-icon">⏸</span> Pending</button>
+
+  <div class="nav-section">Trading</div>
+  <button class="nav-item" data-page="position" onclick="switchPage('position')"><span class="nav-icon">🎯</span> Manual Position</button>
+
+  <div class="nav-section">History</div>
+  <button class="nav-item" data-page="history" onclick="switchPage('history')"><span class="nav-icon">📅</span> PnL Harian</button>
+  <button class="nav-item" data-page="poshistory" onclick="switchPage('poshistory')"><span class="nav-icon">📜</span> Riwayat Position</button>
+  <button class="nav-item" data-page="logs" onclick="switchPage('logs')"><span class="nav-icon">▤</span> Bot Logs</button>
+
+  <div class="nav-section">Settings</div>
+  <button class="nav-item" data-page="config" onclick="switchPage('config')"><span class="nav-icon">⚙</span> Config</button>
+</aside>
+
+<main class="main">
 <header>
-  <h1>▣ DCA BOT</h1>
   <span class="badge gray" id="modeLabel">—</span>
   <span class="badge gray" id="reopenLabel">—</span>
   <span class="badge gray" id="trendIntervalLabel">—</span>
@@ -79,6 +122,7 @@ tr.day-detail th{background:var(--surface)}
   </div>
 </header>
 
+<div class="page active" data-page="overview">
 <div class="stats">
   <div class="stat"><div class="stat-label">Total PnL</div><div class="stat-value" id="st-pnl">—</div></div>
   <div class="stat"><div class="stat-label">PnL Hari Ini</div><div class="stat-value" id="st-pnl-today">—</div></div>
@@ -102,7 +146,9 @@ tr.day-detail th{background:var(--surface)}
     <button class="btn success" id="cp-apply-btn" onclick="doApplyCompound()" disabled>Terapkan Compounding</button>
   </div>
 </div>
+</div><!-- /page overview -->
 
+<div class="page" data-page="pending">
 <div class="panel" id="pending-panel" style="display:none">
   <div class="panel-header">
     <span>⏸ Entry Pending</span>
@@ -126,7 +172,9 @@ tr.day-detail th{background:var(--surface)}
   </table>
   <div class="day-note">ℹ️ Base order dipasang sebagai LIMIT order, belum aktif sampai kefill. Otomatis dibatalkan kalau tidak kefill dalam batas waktu timeout (lihat Config).</div>
 </div>
+</div><!-- /page pending -->
 
+<div class="page" data-page="deals">
 <div class="panel">
   <div class="panel-header">
     <span>📂 Deal Aktif</span>
@@ -141,7 +189,27 @@ tr.day-detail th{background:var(--surface)}
     <tbody id="deals-body"><tr><td colspan="11" class="empty">Belum connect</td></tr></tbody>
   </table>
 </div>
+</div><!-- /page deals -->
 
+<div class="page" data-page="position">
+<div class="panel">
+  <div class="panel-header">
+    <span>🎯 Manual Position (di luar DCA)</span>
+    <span style="display:flex;gap:6px">
+      <input id="posSymbol" placeholder="BTCUSDT" style="width:110px;text-transform:uppercase">
+      <input id="posBudget" type="number" step="any" placeholder="Budget USDT" style="width:110px">
+      <button class="btn success" onclick="doAddPosition()" title="Entry pertama buka posisi baru; kalau sudah ada posisi di symbol ini, jadi entry tambahan">+ Entry</button>
+    </span>
+  </div>
+  <table>
+    <thead><tr><th>Symbol</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>Entry ke</th><th>SL</th><th>Trailing</th><th>Action</th></tr></thead>
+    <tbody id="positions-body"><tr><td colspan="9" class="empty">Belum ada Manual Position aktif</td></tr></tbody>
+  </table>
+  <div class="day-note">ℹ️ Entry manual — kamu yang tentukan kapan & berapa besar tiap entry (bukan aturan safety order DCA). Stop Loss aktif dari awal. Trailing Stop baru aktif setelah harga naik sekian % dari avg entry, lalu mengikuti harga tertinggi.</div>
+</div>
+</div><!-- /page position -->
+
+<div class="page" data-page="history">
 <div class="panel">
   <div class="panel-header">
     <span>📅 PnL Harian</span>
@@ -161,7 +229,42 @@ tr.day-detail th{background:var(--surface)}
   </table>
   <div class="day-note">ℹ️ Klik baris tanggal utk lihat detail deal di hari itu. Deal yang ditutup lewat <b>Manual Sell</b> (di luar bot) ikut tercatat tapi PnL-nya tidak dihitung ke Total PnL / Win Rate / Compounding.</div>
 </div>
+</div><!-- /page history -->
 
+<div class="page" data-page="poshistory">
+<div class="panel" id="pos-history-panel">
+  <div class="panel-header">
+    <span>📜 Riwayat Manual Position</span>
+    <button class="btn" onclick="loadPositionHistory()">↻ Refresh</button>
+  </div>
+  <table>
+    <thead><tr><th>Symbol</th><th>Avg</th><th>Exit</th><th>PnL%</th><th>PnL USDT (net fee)</th><th>Entry</th><th>Reason</th><th>Waktu</th></tr></thead>
+    <tbody id="pos-history-body"><tr><td colspan="8" class="empty">—</td></tr></tbody>
+  </table>
+</div>
+</div><!-- /page poshistory -->
+
+<div class="page" data-page="logs">
+<div class="panel">
+  <div class="panel-header">
+    <span>▤ Bot Logs</span>
+    <span style="display:flex;gap:6px;align-items:center">
+      <select id="logLines" style="width:110px">
+        <option value="100">100 baris</option>
+        <option value="150" selected>150 baris</option>
+        <option value="300">300 baris</option>
+        <option value="1000">1000 baris</option>
+      </select>
+      <button class="btn" onclick="loadLogs()">↻ Refresh</button>
+    </span>
+  </div>
+  <div style="padding:14px">
+    <div class="log-box" id="log-box">Belum dimuat — klik Refresh.</div>
+  </div>
+</div>
+</div><!-- /page logs -->
+
+<div class="page" data-page="config">
 <div class="panel">
   <div class="panel-header">
     <span>⚙ Config DCA</span>
@@ -172,8 +275,10 @@ tr.day-detail th{background:var(--surface)}
   </div>
   <div class="config-grid" id="config-grid"><div class="empty" style="grid-column:1/-1">Loading...</div></div>
 </div>
+</div><!-- /page config -->
 
-</div>
+</main>
+</div><!-- /app-shell -->
 
 <script>
 // Default: kalau belum pernah disimpan, pakai origin halaman ini sendiri.
@@ -201,8 +306,35 @@ const REASON_LABEL = {
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('apiUrl').value = API;
   document.getElementById('apiSecret').value = API_SECRET;
+  switchPage(localStorage.getItem('dca_dashboard_page') || 'overview');
   connect();
 });
+
+// ── Sidebar page switching ──────────────────────────────────────────────
+function switchPage(pageId) {
+  document.querySelectorAll('.page').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === pageId);
+  });
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.page === pageId);
+  });
+  localStorage.setItem('dca_dashboard_page', pageId);
+  if (pageId === 'logs') loadLogs();
+}
+
+async function loadLogs() {
+  const box = document.getElementById('log-box');
+  const n = document.getElementById('logLines').value;
+  box.textContent = 'Memuat...';
+  try {
+    const res = await apiFetch(`/api/logs?n=${n}`);
+    if (!res.ok) { box.textContent = '❌ ' + (res.error || 'Gagal memuat log'); return; }
+    box.textContent = (res.logs && res.logs.length) ? res.logs.join('\n') : 'Belum ada log utk hari ini.';
+    box.scrollTop = box.scrollHeight;
+  } catch (e) {
+    box.textContent = '❌ Gagal connect: ' + e.message;
+  }
+}
 
 function connect() {
   API = document.getElementById('apiUrl').value.replace(/\/$/, '') || window.location.origin;
@@ -212,9 +344,11 @@ function connect() {
   refreshAll();
   loadHistory();
   loadCompoundStatus();
+  loadPositionHistory();
   setInterval(refreshAll, 10000);
   setInterval(loadHistory, 60000);        // history + PnL harian cukup di-refresh tiap 1 menit
   setInterval(loadCompoundStatus, 15000); // compounding pool cukup tiap 15 detik
+  setInterval(loadPositionHistory, 60000);
 }
 
 async function apiFetch(path, opts = {}) {
@@ -259,6 +393,7 @@ async function refreshAll() {
     renderDeals(d.deals);
     renderPending(d.pendingEntries || {});
     renderLimitPending(d.pendingLimitEntries || {});
+    renderPositions(d.positions || {});
 
     // Jangan timpa form Config kalau user sedang mengetik/belum Save.
     if (!configDirty) {
@@ -397,6 +532,93 @@ function renderDeals(deals) {
             : `<button class="btn ghost small" onclick="doHold('${sym}')" title="Bekukan TP sementara — SO & SL tetap normal, nunggu harga naik lebih tinggi dulu">⏸ Hold TP</button>`}
         </div>
       </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Manual Position (DILUAR DCA) — entry manual + trailing stop ────────────
+function renderPositions(positions) {
+  const entries = Object.entries(positions || {});
+  const tbody = document.getElementById('positions-body');
+  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty">Belum ada Manual Position aktif</td></tr>'; return; }
+  tbody.innerHTML = entries.map(([sym, p]) => {
+    const sign = p.pnlPct >= 0 ? '+' : '';
+    const cls  = p.pnlPct >= 0 ? 'green' : 'red';
+    const pnlTitle = (p.buyFeeUsdt != null && p.estSellFeeUsdt != null)
+      ? `title="Sudah dikurangi fee beli aktual (${p.buyFeeUsdt.toFixed(4)} USDT) + estimasi fee jual (${p.estSellFeeUsdt.toFixed(4)} USDT)"`
+      : '';
+    const activationPrice = p.avgPrice * (1 + p.trailingActivationPercent / 100);
+    const trailingCell = p.trailingActive
+      ? `<span class="badge green">🔔 ON</span><br><span style="font-size:10px;color:var(--muted)">peak ${p.peakPrice.toFixed(6)} · stop ${p.trailingStopPrice.toFixed(6)}</span>`
+      : `<span class="badge gray">OFF</span><br><span style="font-size:10px;color:var(--muted)">aktif di atas ${activationPrice.toFixed(6)}</span>`;
+    return `<tr>
+      <td><b>${sym}</b></td>
+      <td>${p.avgPrice?.toFixed(6)}</td>
+      <td>${p.currentPrice ?? '—'}</td>
+      <td style="color:var(--${cls})" ${pnlTitle}>${sign}${p.pnlPct?.toFixed(2) ?? '—'}%</td>
+      <td style="color:var(--${cls})" ${pnlTitle}>${p.pnlUsdt != null ? (sign + p.pnlUsdt.toFixed(2) + ' USDT') : '—'}</td>
+      <td>${p.entries.length}</td>
+      <td style="color:var(--red)">${p.slPrice?.toFixed(6) ?? '—'}</td>
+      <td>${trailingCell}</td>
+      <td>
+        <div class="action-cell">
+          <button class="btn ghost small" onclick="promptAddPosition('${sym}')" title="Entry tambahan di symbol ini">+ Entry</button>
+          <button class="btn danger small" onclick="doClosePosition('${sym}')" title="Bot eksekusi market sell asli">Close (Sell)</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function doAddPosition() {
+  const sym = document.getElementById('posSymbol').value.trim().toUpperCase();
+  const budgetRaw = document.getElementById('posBudget').value.trim();
+  if (!sym) return alert('Masukkan symbol');
+  const budget = parseFloat(budgetRaw);
+  if (!(budget > 0)) return alert('Budget tidak valid');
+
+  if (!confirm(`Entry ${sym} sebesar ${budget} USDT (market order)?\n\nKalau belum ada Manual Position di symbol ini, ini akan membuka posisi baru. Kalau sudah ada, ini jadi entry TAMBAHAN (avg price akan di-recalculate).`)) return;
+
+  const res = await apiPost('/api/position/add', { symbol: sym, budget });
+  alert(res.ok ? `✅ Entry ${sym} berhasil. Avg price sekarang: ${res.position.avgPrice.toFixed(6)}` : `❌ ${res.error}`);
+  if (res.ok) {
+    document.getElementById('posSymbol').value = '';
+    document.getElementById('posBudget').value = '';
+    refreshAll();
+  }
+}
+
+function promptAddPosition(sym) {
+  document.getElementById('posSymbol').value = sym;
+  document.getElementById('posBudget').focus();
+}
+
+async function doClosePosition(sym) {
+  if (!confirm(`Tutup Manual Position ${sym} sekarang?\n\nBot akan eksekusi MARKET SELL asli ke Bitget utk SELURUH qty di posisi ini.`)) return;
+  const res = await apiPost('/api/position/close', { symbol: sym });
+  alert(res.ok ? `✅ Position ${sym} ditutup` : `❌ ${res.error}`);
+  if (res.ok) { refreshAll(); loadPositionHistory(); }
+}
+
+async function loadPositionHistory() {
+  const res = await apiFetch('/api/position/history?limit=200');
+  const tbody = document.getElementById('pos-history-body');
+  const list = (res.ok && res.positions) ? res.positions : [];
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty">Belum ada Manual Position yang closed</td></tr>'; return; }
+
+  const REASON_LABEL_POS = { stop_loss: '🛑 Stop Loss', trailing_stop: '📉 Trailing Stop', manual_close: '🖐 Manual Close' };
+  tbody.innerHTML = list.map(p => {
+    const sign = p.pnlPct >= 0 ? '+' : '';
+    const cls  = p.pnlPct >= 0 ? 'green' : 'red';
+    return `<tr>
+      <td><b>${p.symbol}</b></td>
+      <td>${p.avgPrice.toFixed(6)}</td>
+      <td>${p.exitPrice != null ? p.exitPrice.toFixed(6) : '—'}</td>
+      <td style="color:var(--${cls})">${sign}${p.pnlPct.toFixed(2)}%</td>
+      <td style="color:var(--${cls})">${sign}${p.pnlUsdt.toFixed(2)} USDT</td>
+      <td>${p.entries.length}</td>
+      <td>${REASON_LABEL_POS[p.reason] || p.reason}</td>
+      <td style="font-size:10px">${new Date(p.closedAt).toLocaleString('id-ID')}</td>
     </tr>`;
   }).join('');
 }

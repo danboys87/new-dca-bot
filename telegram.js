@@ -159,3 +159,42 @@ export async function notifyCompoundingApplied(result) {
     `<i>Berlaku utk deal baru berikutnya.</i>`
   );
 }
+
+// ── Manual Position (DILUAR DCA) — entry manual + trailing stop ────────────
+export async function notifyPositionEntry(position) {
+  const isFirst = position.entries.length === 1;
+  const lastEntry = position.entries[position.entries.length - 1];
+  await send(
+    `${isFirst ? '🚀 <b>Position Dibuka</b>' : '➕ <b>Entry Tambahan</b>'} — ${position.symbol}\n` +
+    `Entry ini: ${lastEntry.qty} @ ${lastEntry.price} (${lastEntry.budget} USDT)\n` +
+    `Avg price: ${position.avgPrice.toFixed(6)} | Total qty: ${position.totalQty}\n` +
+    `SL: ${position.slPrice?.toFixed(6) ?? '—'} (${position.stopLossPercent}%)\n` +
+    `Trailing aktif di atas: ${(position.avgPrice * (1 + position.trailingActivationPercent / 100)).toFixed(6)} (+${position.trailingActivationPercent}%), trail ${position.trailingStopPercent}%`
+  );
+}
+
+export async function notifyPositionTrailingActivated(position) {
+  await send(
+    `🔔 <b>Trailing Stop Aktif</b> — ${position.symbol}\n` +
+    `Peak: ${position.peakPrice.toFixed(6)}\n` +
+    `Trailing stop sekarang di: ${position.trailingStopPrice.toFixed(6)} (-${position.trailingStopPercent}% dari peak)\n` +
+    `<i>Trailing stop akan naik terus mengikuti harga tertinggi baru.</i>`
+  );
+}
+
+export async function notifyPositionClosed(closed) {
+  const emoji = closed.pnlPct >= 0 ? '🟢' : '🔴';
+  const sign  = closed.pnlPct >= 0 ? '+' : '';
+  const labels = { stop_loss: '🛑 Stop Loss', trailing_stop: '📉 Trailing Stop', manual_close: '🖐 Manual Close' };
+  const feeLine = closed.totalFeeUsdt
+    ? `Fee: ${closed.totalFeeUsdt.toFixed(4)} USDT — sudah dipotong dari PnL\n`
+    : '';
+  await send(
+    `${emoji} <b>Position Ditutup</b> — ${closed.symbol}\n` +
+    `📌 ${labels[closed.reason] || closed.reason}\n` +
+    `Avg entry: ${closed.avgPrice.toFixed(6)} → Exit: ${closed.exitPrice.toFixed(6)}\n` +
+    `PnL: ${sign}${closed.pnlPct.toFixed(2)}% (${sign}${closed.pnlUsdt.toFixed(2)} USDT)\n` +
+    feeLine +
+    `Jumlah entry: ${closed.entries.length}`
+  );
+}

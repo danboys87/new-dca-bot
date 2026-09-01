@@ -5,8 +5,10 @@ import { placeOrder, getOrder, getAssetBalance, getCurrentPrice, cancelOrder, ex
 import { log, logTrade } from './logger.js';
 import {
   startDeal, addSafetyOrderFill, updateDealCalc, closeDeal, getDeal,
+  hasActivePosition, startPosition, addPositionEntry, updatePositionCalc, closePosition, getPosition,
 } from './state.js';
 import { recalcDeal } from './dcaEngine.js';
+import { recalcPosition } from './positionEngine.js';
 import { config } from './config.js';
 
 const isDryRun = process.env.DRY_RUN === 'true';
@@ -237,4 +239,47 @@ export async function closeDealMarket(symbol, reason) {
 
   logTrade({ side: 'sell', symbol, qty, price, tag: reason });
   return closeDeal(symbol, { exitPrice: price, reason, feeUsdt });
+}
+
+// ── Manual Position (DILUAR DCA) — entry manual + trailing stop ────────────
+// Reuse marketBuy()/marketSellAll() yang sama dgn DCA (market order biasa di
+// Bitget) — bedanya cuma di state yang disimpan & logic exit-nya.
+
+/**
+ * Entry manual — kalau belum ada posisi aktif utk symbol ini, buka posisi baru
+ * (pakai default SL/trailing dari config.position). Kalau sudah ada, jadi
+ * entry TAMBAHAN (avgPrice di-recalculate, status trailing tidak direset).
+ */
+export async function openOrAddPosition(symbol, budget) {
+  log('executor', `${hasActivePosition(symbol) ? '➕ Entry tambahan' : '🚀 Membuka'} position ${symbol} | budget=${budget} USDT`);
+  const { price, qty, orderId, feeUsdt } = await marketBuy(symbol, budget);
+
+  let position;
+  if (hasActivePosition(symbol)) {
+    position = addPositionEntry(symbol, { qty, price, budget, orderId, feeUsdt });
+  } else {
+    const pc = config.position || {};
+    position = startPosition(symbol, {
+      qty, price, budget, orderId, feeUsdt,
+      stopLossPercent:            pc.stopLossPercent ?? 10,
+      trailingActivationPercent:  pc.trailingActivationPercent ?? 3,
+      trailingStopPercent:        pc.trailingStopPercent ?? 2,
+    });
+  }
+  recalcPosition(position);
+  updatePositionCalc(symbol, position);
+
+  logTrade({ side: 'buy', symbol, qty, price, tag: 'position' });
+  return position;
+}
+
+export async function closePositionMarket(symbol, reason) {
+  const position = getPosition(symbol);
+  if (!position) throw new Error(`Position ${symbol} tidak ditemukan`);
+
+  log('executor', `🔻 Menutup position ${symbol} | reason=${reason} | qty=${position.totalQty}`);
+  const { price, qty, feeUsdt } = await marketSellAll(symbol, position.totalQty);
+
+  logTrade({ side: 'sell', symbol, qty, price, tag: `position_${reason}` });
+  return closePosition(symbol, { exitPrice: price, reason, feeUsdt });
 }
