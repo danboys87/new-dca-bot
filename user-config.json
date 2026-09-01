@@ -25,7 +25,8 @@
     "compoundingThresholdUsdt": 10,
     "compoundingAutoApply": false,
     "_comment_fee": "Fee trading (maker/taker) SEKARANG dikurangi dari PnL. Untuk LIVE TRADING, fee diambil OTOMATIS dari response order Bitget (feeDetail) — akurat, tidak perlu di-set manual. takerFeePercent di bawah ini HANYA dipakai sbg (1) simulasi fee saat DRY_RUN=true (karena tidak ada order asli), dan (2) estimasi fee JUAL utk deal yg masih aktif di dashboard/Telegram (fee jual pasti baru diketahui setelah order dieksekusi beneran). Sesuaikan dgn tier fee akun Bitget kamu (cek di Bitget: Fee Rate).",
-    "takerFeePercent": 0.1
+    "takerFeePercent": 0.1,
+    "entryLimitTimeoutMin": 2880
   },
   "dca": {
     "_comment_baseOrder": "Order pertama (initial order) saat deal dibuka",
