@@ -771,7 +771,7 @@ function renderDailyFromCache() {
 }
 
 function renderConfig(cfg) {
-  const d = cfg.dca, t = cfg.trading;
+  const d = cfg.dca, t = cfg.trading, p = cfg.position || {};
   document.getElementById('config-grid').innerHTML = `
     <div class="field"><label>Base Order (USDT)</label><input id="cfg-base" type="number" value="${d.baseOrderSize}"></div>
     <div class="field"><label>Safety Order (USDT)</label><input id="cfg-so" type="number" value="${d.safetyOrderSize}"></div>
@@ -815,6 +815,15 @@ function renderConfig(cfg) {
     <div class="field"><label>Compounding Aktif</label><select id="cfg-compoundon"><option value="true" ${t.compoundingEnabled?'selected':''}>Ya</option><option value="false" ${!t.compoundingEnabled?'selected':''}>Tidak</option></select></div>
     <div class="field"><label>Compounding Threshold (USDT)</label><input id="cfg-compoundthreshold" type="number" value="${t.compoundingThresholdUsdt ?? 10}"></div>
     <div class="field"><label>Compounding Auto-Apply</label><select id="cfg-compoundauto"><option value="false" ${!t.compoundingAutoApply?'selected':''}>Manual (nunggu konfirmasi)</option><option value="true" ${t.compoundingAutoApply?'selected':''}>Otomatis</option></select></div>
+    <div class="field" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <label style="font-size:11px;font-weight:600;text-transform:none;letter-spacing:0;color:var(--text)">🎯 Manual Position (di luar DCA) — SEPENUHNYA terpisah dari setting DCA di atas</label>
+    </div>
+    <div class="field"><label>Position — Stop Loss (%)</label><input id="cfg-pos-sl" type="number" step="0.1" value="${p.stopLossPercent ?? 10}" title="Basis avgPrice, aktif SEPANJANG WAKTU sejak entry pertama (beda dari SL DCA yang baru aktif setelah SO habis)."></div>
+    <div class="field"><label>Position — Trailing Aktivasi (%)</label><input id="cfg-pos-trailact" type="number" step="0.1" value="${p.trailingActivationPercent ?? 3}" title="Trailing baru aktif setelah harga naik sekian % dari avgPrice."></div>
+    <div class="field"><label>Position — Trailing Stop (%)</label><input id="cfg-pos-trailstop" type="number" step="0.1" value="${p.trailingStopPercent ?? 2}" title="Setelah trailing aktif, posisi ditutup kalau harga turun sekian % dari harga tertinggi (peak) yang tercapai."></div>
+    <div class="field" style="grid-column:1/-1">
+      <div class="day-note" style="border-top:none;padding:6px 0 0">ℹ️ Perubahan di sini cuma jadi DEFAULT utk posisi BARU yang dibuka setelah Save. Posisi yang sudah berjalan tidak berubah.</div>
+    </div>
   `;
 
   const grid = document.getElementById('config-grid');
@@ -856,6 +865,11 @@ async function saveConfig() {
       compoundingEnabled: document.getElementById('cfg-compoundon').value === 'true',
       compoundingThresholdUsdt: parseFloat(document.getElementById('cfg-compoundthreshold').value),
       compoundingAutoApply: document.getElementById('cfg-compoundauto').value === 'true',
+    },
+    position: {
+      stopLossPercent: parseFloat(document.getElementById('cfg-pos-sl').value),
+      trailingActivationPercent: parseFloat(document.getElementById('cfg-pos-trailact').value),
+      trailingStopPercent: parseFloat(document.getElementById('cfg-pos-trailstop').value),
     },
   };
   const res = await apiPost('/api/config', updates);
