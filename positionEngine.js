@@ -15,7 +15,10 @@
  *     langsung aktif dari awal.
  *  2. Entry tambahan (opsional, kapan saja) → avgPrice/qty di-recalculate,
  *     SL ikut bergeser mengikuti avgPrice baru. Status trailing (kalau sudah
- *     aktif) TIDAK direset oleh entry tambahan.
+ *     aktif) DIRESET oleh entry tambahan — trailing akan mulai lagi dari nol
+ *     berdasarkan avgPrice yang baru (lihat komentar di recalcPosition() utk
+ *     alasannya: peak lama jadi tidak relevan & bisa memicu trailing_stop
+ *     palsu tepat setelah entry).
  *  3. Trailing Stop BELUM aktif sampai harga naik `trailingActivationPercent`%
  *     dari avgPrice. Sebelum titik ini tercapai, satu-satunya proteksi adalah
  *     Stop Loss tetap.
@@ -55,11 +58,17 @@ export function recalcPosition(position) {
   position.avgPrice   = totalQty > 0 ? totalSpent / totalQty : null;
   position.slPrice    = calcSlPrice(position.avgPrice, position.stopLossPercent);
 
-  // Kalau trailing sudah aktif, trailingStopPrice tetap dihitung ulang (basis
-  // peakPrice yang ada — TIDAK berubah karena entry tambahan, cuma dipastikan
-  // konsisten di objek yang sama).
-  if (position.trailingActive && position.peakPrice !== null) {
-    position.trailingStopPrice = calcTrailingStopPrice(position.peakPrice, position.trailingStopPercent);
+  // PENTING: entry TAMBAHAN (bukan entry pertama) mengubah avgPrice — peak &
+  // trailingStopPrice yang lama jadi TIDAK RELEVAN lagi terhadap avgPrice baru
+  // (bisa jauh di atas harga sekarang). Kalau dibiarkan, trailing yang sudah
+  // aktif bisa langsung ke-trigger 'trailing_stop' di loop berikutnya HANYA
+  // karena entry tambahan bikin harga sekarang "kelihatan" jauh di bawah peak
+  // lama — padahal posisi baru saja di-average-down, bukan mau ditutup.
+  // Solusinya: reset trailing supaya restart dari avgPrice yang baru.
+  if (position.entries.length > 1) {
+    position.trailingActive = false;
+    position.peakPrice = null;
+    position.trailingStopPrice = null;
   }
 
   return position;

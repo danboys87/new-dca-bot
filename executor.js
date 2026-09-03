@@ -248,7 +248,8 @@ export async function closeDealMarket(symbol, reason) {
 /**
  * Entry manual — kalau belum ada posisi aktif utk symbol ini, buka posisi baru
  * (pakai default SL/trailing dari config.position). Kalau sudah ada, jadi
- * entry TAMBAHAN (avgPrice di-recalculate, status trailing tidak direset).
+ * entry TAMBAHAN (avgPrice di-recalculate; status trailing DIRESET — lihat
+ * recalcPosition() di positionEngine.js utk alasannya).
  */
 export async function openOrAddPosition(symbol, budget) {
   log('executor', `${hasActivePosition(symbol) ? '➕ Entry tambahan' : '🚀 Membuka'} position ${symbol} | budget=${budget} USDT`);

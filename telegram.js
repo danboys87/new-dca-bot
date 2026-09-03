@@ -169,7 +169,8 @@ export async function notifyPositionEntry(position) {
     `Entry ini: ${lastEntry.qty} @ ${lastEntry.price} (${lastEntry.budget} USDT)\n` +
     `Avg price: ${position.avgPrice.toFixed(6)} | Total qty: ${position.totalQty}\n` +
     `SL: ${position.slPrice?.toFixed(6) ?? '—'} (${position.stopLossPercent}%)\n` +
-    `Trailing aktif di atas: ${(position.avgPrice * (1 + position.trailingActivationPercent / 100)).toFixed(6)} (+${position.trailingActivationPercent}%), trail ${position.trailingStopPercent}%`
+    `Trailing aktif di atas: ${(position.avgPrice * (1 + position.trailingActivationPercent / 100)).toFixed(6)} (+${position.trailingActivationPercent}%), trail ${position.trailingStopPercent}%` +
+    (isFirst ? '' : '\n<i>⚠️ Status trailing di-reset karena avg price berubah — akan mulai lagi dari nol berdasarkan avg price baru.</i>')
   );
 }
 

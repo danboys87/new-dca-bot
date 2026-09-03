@@ -308,8 +308,9 @@ export function startPosition(symbol, { qty, price, budget, orderId, feeUsdt = 0
 
 /**
  * Entry tambahan MANUAL — kapan saja, harga apa saja (hasil beli aktual).
- * avgPrice/qty/SL di-recalculate di executor.js (recalcPosition). Status
- * trailing (aktif/peak) TIDAK direset oleh entry tambahan.
+ * avgPrice/qty/SL di-recalculate di executor.js (recalcPosition), yang juga
+ * ME-RESET status trailing (aktif/peak) — lihat recalcPosition() di
+ * positionEngine.js utk alasannya.
  */
 export function addPositionEntry(symbol, { qty, price, budget, orderId, feeUsdt = 0 }) {
   const position = _state.positions[symbol];

@@ -202,10 +202,10 @@ tr.day-detail th{background:var(--surface)}
     </span>
   </div>
   <table>
-    <thead><tr><th>Symbol</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>Entry ke</th><th>SL</th><th>Trailing</th><th>Action</th></tr></thead>
-    <tbody id="positions-body"><tr><td colspan="9" class="empty">Belum ada Manual Position aktif</td></tr></tbody>
+    <thead><tr><th>Symbol</th><th>Total USDT</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>Entry ke</th><th>SL</th><th>Trailing</th><th>Action</th></tr></thead>
+    <tbody id="positions-body"><tr><td colspan="10" class="empty">Belum ada Manual Position aktif</td></tr></tbody>
   </table>
-  <div class="day-note">ℹ️ Entry manual — kamu yang tentukan kapan & berapa besar tiap entry (bukan aturan safety order DCA). Stop Loss aktif dari awal. Trailing Stop baru aktif setelah harga naik sekian % dari avg entry, lalu mengikuti harga tertinggi.</div>
+  <div class="day-note">ℹ️ Entry manual — kamu yang tentukan kapan & berapa besar tiap entry (bukan aturan safety order DCA). Stop Loss aktif dari awal, mengikuti avg price terbaru. Trailing Stop baru aktif setelah harga naik sekian % dari avg entry, lalu mengikuti harga tertinggi — <b>tiap ada entry tambahan, status trailing di-reset dan mulai lagi dari nol</b> berdasarkan avg price yang baru (supaya tidak salah trigger karena peak lama sudah tidak relevan).</div>
 </div>
 </div><!-- /page position -->
 
@@ -540,7 +540,7 @@ function renderDeals(deals) {
 function renderPositions(positions) {
   const entries = Object.entries(positions || {});
   const tbody = document.getElementById('positions-body');
-  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="9" class="empty">Belum ada Manual Position aktif</td></tr>'; return; }
+  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty">Belum ada Manual Position aktif</td></tr>'; return; }
   tbody.innerHTML = entries.map(([sym, p]) => {
     const sign = p.pnlPct >= 0 ? '+' : '';
     const cls  = p.pnlPct >= 0 ? 'green' : 'red';
@@ -553,6 +553,7 @@ function renderPositions(positions) {
       : `<span class="badge gray">OFF</span><br><span style="font-size:10px;color:var(--muted)">aktif di atas ${activationPrice.toFixed(6)}</span>`;
     return `<tr>
       <td><b>${sym}</b></td>
+      <td>${p.totalSpent != null ? p.totalSpent.toFixed(2) + ' USDT' : '—'}</td>
       <td>${p.avgPrice?.toFixed(6)}</td>
       <td>${p.currentPrice ?? '—'}</td>
       <td style="color:var(--${cls})" ${pnlTitle}>${sign}${p.pnlPct?.toFixed(2) ?? '—'}%</td>
