@@ -1,10 +1,10 @@
 /**
  * Executor — eksekusi order ke Bitget Spot (base order, safety order, close deal)
  */
-import { placeOrder, getOrder, getAssetBalance, getCurrentPrice, cancelOrder, extractFeeUsdt } from './bitget.js';
+import { placeOrder, getOrder, getAssetBalance, getCurrentPrice, cancelOrder, extractFeeUsdt, getSymbolInfo, roundDownToPrecision } from './bitget.js';
 import { log, logTrade } from './logger.js';
 import {
-  startDeal, addSafetyOrderFill, updateDealCalc, closeDeal, getDeal,
+  startDeal, addSafetyOrderFill, addManualDealEntry, updateDealCalc, closeDeal, getDeal,
   hasActivePosition, startPosition, addPositionEntry, updatePositionCalc, closePosition, getPosition,
 } from './state.js';
 import { recalcDeal } from './dcaEngine.js';
@@ -15,41 +15,45 @@ const isDryRun = process.env.DRY_RUN === 'true';
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function getQtyDecimals(price) {
-  if (price >= 10000) return 6;
-  if (price >= 100)   return 4;
-  if (price >= 1)     return 2;
-  return 2;
-}
-
+/**
+ * Estimasi qty & bulatkan budget SESUAI precision ASLI dari Bitget utk
+ * symbol ini (bukan tebakan berdasar harga) — dipakai sebelum market/limit
+ * buy. quotePrecision menentukan berapa desimal yang boleh dikirim sebagai
+ * `size` utk MARKET BUY (size = jumlah USDT, bukan qty koin!). Kalau
+ * dilanggar, Bitget nolak order dengan error 40808 (checkBDScale).
+ */
 async function calcQuantity(symbol, budget) {
   const price = await getCurrentPrice(symbol);
   if (!price || price <= 0) throw new Error(`Harga tidak valid untuk ${symbol}`);
-  const decimals   = getQtyDecimals(price);
-  const multiplier = Math.pow(10, decimals);
-  const qty        = Math.floor((budget / price) * multiplier) / multiplier;
-  return { price, qty };
+
+  const info = await getSymbolInfo(symbol);
+  const roundedBudget = roundDownToPrecision(budget, info.quotePrecision);
+  if (roundedBudget <= 0) throw new Error(`Budget ${budget} terlalu kecil utk precision ${symbol} (quotePrecision=${info.quotePrecision})`);
+
+  const qty = roundDownToPrecision(roundedBudget / price, info.quantityPrecision);
+  return { price, qty, budget: roundedBudget, info };
 }
 
 async function marketBuy(symbol, budget) {
-  const { price: refPrice, qty } = await calcQuantity(symbol, budget);
+  const { price: refPrice, qty, budget: roundedBudget } = await calcQuantity(symbol, budget);
   if (qty <= 0) throw new Error(`Quantity <= 0 untuk ${symbol}`);
 
   if (isDryRun) {
     // Dry run: tidak ada order asli → fee disimulasikan pakai config.trading.takerFeePercent
     // (default 0.1%), dihitung dari budget (USDT yang "dibelanjakan").
     const feePct  = config.trading.takerFeePercent ?? 0.1;
-    const feeUsdt = budget * (feePct / 100);
+    const feeUsdt = roundedBudget * (feePct / 100);
     log('executor', `[DRY RUN] BUY ${symbol} qty=${qty} @ ${refPrice} (fee simulasi ${feeUsdt.toFixed(4)} USDT)`);
     return { price: refPrice, qty, orderId: `dryrun_${Date.now()}`, feeUsdt };
   }
 
   const usdtBalance = await getAssetBalance('USDT');
   const available    = parseFloat(usdtBalance?.available || 0);
-  const needed        = budget + (config.trading.gasReserve ?? 3);
+  const needed        = roundedBudget + (config.trading.gasReserve ?? 3);
   if (available < needed) throw new Error(`Saldo USDT tidak cukup: ${available} < ${needed}`);
 
-  const order   = await placeOrder({ symbol, side: 'buy', orderType: 'market', size: budget });
+  // size utk market BUY = jumlah USDT (quote), dibulatkan sesuai quotePrecision symbol ini.
+  const order   = await placeOrder({ symbol, side: 'buy', orderType: 'market', size: roundedBudget });
   const orderId = order?.orderId;
   if (!orderId) throw new Error('Tidak ada orderId dari API');
 
@@ -77,10 +81,13 @@ async function marketSellAll(symbol, quantity) {
     return { price: currentPrice, qty: quantity, feeUsdt };
   }
 
+  const info      = await getSymbolInfo(symbol);
   const baseAsset = symbol.replace(config.trading.quoteAsset || 'USDT', '');
   const tokenBal  = await getAssetBalance(baseAsset);
   const available = parseFloat(tokenBal?.available || 0);
-  const sellQty   = Math.floor(Math.min(quantity, available) * 100) / 100;
+  // size utk market SELL = qty koin (base), dibulatkan sesuai quantityPrecision symbol ini
+  // (BUKAN hardcode 2 desimal seperti sebelumnya — itu salah utk banyak pair).
+  const sellQty   = roundDownToPrecision(Math.min(quantity, available), info.quantityPrecision);
   if (sellQty <= 0) throw new Error(`Saldo ${baseAsset} tidak cukup: ${available}`);
 
   const order   = await placeOrder({ symbol, side: 'sell', orderType: 'market', size: sellQty });
@@ -97,6 +104,7 @@ async function marketSellAll(symbol, quantity) {
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
+
 
 export async function openDeal(symbol) {
   const budget = config.dca.baseOrderSize;
@@ -124,6 +132,23 @@ export async function fillSafetyOrder(symbol, step, budget) {
 }
 
 /**
+ * Entry MANUAL tambahan ke deal DCA yang sudah aktif — budget BEBAS, market
+ * order SEKARANG JUGA (tidak nunggu harga turun ke nextSOPrice). Di luar
+ * kuota Safety Order — lihat state.js:addManualDealEntry() utk alasannya.
+ */
+export async function addManualEntryToDeal(symbol, budget) {
+  log('executor', `✋ Entry manual ${symbol} | budget=${budget.toFixed(2)} USDT (di luar kuota SO)`);
+  const { price, qty, orderId, feeUsdt } = await marketBuy(symbol, budget);
+
+  let deal = addManualDealEntry(symbol, { qty, price, budget, orderId, feeUsdt });
+  deal = recalcDeal(deal, config.dca);
+  updateDealCalc(symbol, deal);
+
+  logTrade({ side: 'buy', symbol, qty, price, tag: 'manual' });
+  return deal;
+}
+
+/**
  * Pasang BASE ORDER sebagai LIMIT buy (bukan market) — dipakai kalau
  * config.trading.entryOrderType === 'limit', ATAU kalau user kasih harga
  * spesifik saat start deal (lihat startDeal() di index.js). Deal BELUM
@@ -137,6 +162,7 @@ export async function fillSafetyOrder(symbol, step, budget) {
  */
 export async function openDealLimit(symbol, explicitPrice = null) {
   const budget = config.dca.baseOrderSize;
+  const info   = await getSymbolInfo(symbol);
 
   let limitPrice;
   if (explicitPrice !== null && explicitPrice !== undefined) {
@@ -150,10 +176,12 @@ export async function openDealLimit(symbol, explicitPrice = null) {
     // tidak langsung match seperti market order, nunggu harga turun sedikit dulu.
     limitPrice = currentPrice * (1 - offsetPct / 100);
   }
+  // price utk LIMIT order harus sesuai pricePrecision symbol ini (beda dari
+  // quotePrecision yang dipakai market buy) — kalau tidak, Bitget nolak juga.
+  limitPrice = roundDownToPrecision(limitPrice, info.pricePrecision);
 
-  const decimals   = getQtyDecimals(limitPrice);
-  const multiplier = Math.pow(10, decimals);
-  const qty        = Math.floor((budget / limitPrice) * multiplier) / multiplier;
+  // size utk LIMIT BUY = qty koin (base), BUKAN budget USDT seperti market buy.
+  const qty = roundDownToPrecision(budget / limitPrice, info.quantityPrecision);
   if (qty <= 0) throw new Error(`Quantity <= 0 untuk ${symbol}`);
 
   log('executor', `📝 Pasang limit buy ${symbol} qty=${qty} @ ${limitPrice}${explicitPrice ? ' (harga manual)' : ` (offset -${config.trading.entryLimitOffsetPercent ?? 0.1}%)`}`);

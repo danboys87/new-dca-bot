@@ -136,6 +136,18 @@ async function handleCommand(chatId, text, callbacks) {
       break;
     }
 
+    case '/addentry': {
+      if (!arg || !parts[2]) { await reply(chatId, '❓ Format: /addentry SYMBOL BUDGET\nContoh: /addentry BTCUSDT 20\n\nEntry manual ke deal DCA yang SUDAH AKTIF, market buy sekarang juga (tidak nunggu harga turun ke Next SO). Budget bebas, DI LUAR kuota Safety Order — tidak mengurangi maxSafetyOrders atau mempercepat aktivasi SL.'); break; }
+      const budget = parseFloat(parts[2]);
+      if (!(budget > 0)) { await reply(chatId, `❓ Budget tidak valid: ${parts[2]}`); break; }
+      await reply(chatId, `⏳ Entry manual ${arg} sebesar ${budget} USDT...`);
+      try {
+        const res = await callbacks.addManualDealEntry(arg, budget);
+        await reply(chatId, res.ok ? `✅ Entry manual ${arg} berhasil. Avg price sekarang: ${res.deal.avgPrice.toFixed(6)}` : `❌ ${res.error}`);
+      } catch (e) { await reply(chatId, `❌ Error: ${e.message}`); }
+      break;
+    }
+
     case '/closedca': {
       if (!arg) { await reply(chatId, '❓ Format: /closedca SYMBOL\n(Bot akan eksekusi market sell asli. Kalau kamu sudah jual sendiri di luar bot, pakai /untrack SYMBOL.)'); break; }
       await reply(chatId, `⏳ Menutup deal ${arg} (market sell)...`);
@@ -345,6 +357,7 @@ async function handleCommand(chatId, text, callbacks) {
         `🤖 <b>DCA Bot — Bantuan</b>\n\n` +
         `/startdca SYMBOL [HARGA] — buka deal baru (base order). Kosongkan HARGA utk market/default; isi HARGA utk limit buy persis di harga itu\n` +
         `/closedca SYMBOL  — tutup deal manual (bot market sell)\n` +
+        `/addentry SYMBOL BUDGET — entry manual ke deal DCA aktif, di luar kuota SO\n` +
         `/untrack SYMBOL   — tandai selesai TANPA sell dari bot (kamu sudah jual sendiri di luar bot; PnL tidak dihitung)\n` +
         `/hold SYMBOL      — bekukan TP sementara (SO & SL tetap normal)\n` +
         `/resume SYMBOL    — aktifkan lagi TP normal\n` +

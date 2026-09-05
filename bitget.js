@@ -110,6 +110,43 @@ export async function getCandles(symbol, granularity = '4h', limit = 250) {
   return request('GET', '/api/v2/spot/market/candles', { symbol, granularity, limit }, null, false);
 }
 
+const _symbolInfoCache = new Map();
+
+/**
+ * Ambil spesifikasi trading (precision harga/qty/quote, minimum trade) utk 1
+ * symbol dari Bitget — SUMBER KEBENARAN ASLI, beda-beda tiap pair (bukan
+ * ditebak/hardcode). Di-cache in-memory per proses (nilainya jarang berubah
+ * selama bot jalan) supaya tidak fetch berulang tiap mau order.
+ */
+export async function getSymbolInfo(symbol) {
+  if (_symbolInfoCache.has(symbol)) return _symbolInfoCache.get(symbol);
+
+  const data = await request('GET', '/api/v2/spot/public/symbols', { symbol }, null, false);
+  const info = Array.isArray(data) ? data[0] : data;
+  if (!info) throw new Error(`Info symbol ${symbol} tidak ditemukan di Bitget`);
+
+  const parsed = {
+    symbol,
+    pricePrecision:    parseInt(info.pricePrecision, 10),
+    quantityPrecision: parseInt(info.quantityPrecision, 10),
+    quotePrecision:    parseInt(info.quotePrecision, 10),
+    minTradeUSDT:      parseFloat(info.minTradeUSDT || '0'),
+    minTradeAmount:    parseFloat(info.minTradeAmount || '0'),
+  };
+  _symbolInfoCache.set(symbol, parsed);
+  return parsed;
+}
+
+/**
+ * Bulatkan KE BAWAH ke sejumlah desimal tertentu — dipakai supaya nilai yang
+ * dikirim ke Bitget tidak pernah melebihi saldo/qty asli yang tersedia
+ * (floor, bukan round, biar tidak "over-spend" akibat pembulatan ke atas).
+ */
+export function roundDownToPrecision(value, precision) {
+  const multiplier = Math.pow(10, precision);
+  return Math.floor(value * multiplier) / multiplier;
+}
+
 export async function testConnection() {
   try {
     const assets = await getAccountAssets();

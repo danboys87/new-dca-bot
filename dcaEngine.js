@@ -101,10 +101,16 @@ export function recalcDeal(deal, cfg) {
   deal.totalSpent = totalSpent;
   deal.avgPrice   = totalQty > 0 ? totalSpent / totalQty : null;
 
-  const soFilled = deal.orders.length - 1; // order pertama = base order
+  // Cuma hitung order bertag 'soN' sebagai slot Safety Order — entry manual
+  // (tag 'manual') SENGAJA tidak dihitung, supaya tidak mengurangi kuota
+  // maxSafetyOrders atau mempercepat aktivasi SL. Order pertama selalu 'base'.
+  const soFilled = deal.orders.filter(o => o.tag && o.tag.startsWith('so')).length;
   deal.safetyOrdersFilled = soFilled;
 
   if (soFilled < (cfg.maxSafetyOrders ?? 5)) {
+    // lastFill tetap dari order PALING BARU apapun jenisnya (base/so/manual) —
+    // deviasi SO berikutnya dihitung dari harga terakhir kali bot/kamu beli,
+    // bukan cuma dari SO otomatis terakhir.
     const lastFill = deal.orders[deal.orders.length - 1].price;
     deal.nextSOPrice = calcNextSOPrice(lastFill, soFilled + 1, cfg);
     deal.nextSOSize  = calcSOSize(soFilled + 1, cfg);

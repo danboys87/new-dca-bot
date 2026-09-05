@@ -86,6 +86,25 @@ export function addSafetyOrderFill(symbol, { step, qty, price, budget, orderId, 
   return deal;
 }
 
+/**
+ * Entry MANUAL tambahan ke deal DCA yang sudah aktif — budget BEBAS ditentukan
+ * user, dieksekusi SEKARANG JUGA (tidak nunggu harga turun ke nextSOPrice).
+ * SENGAJA di-tag 'manual' (bukan 'soN') supaya TIDAK dihitung sebagai slot
+ * Safety Order — tidak mengurangi kuota maxSafetyOrders, tidak mempercepat
+ * aktivasi Stop Loss. Tetap ikut menambah avgPrice/totalQty (jadi TP/SL/next
+ * SO price tetap ter-update berdasarkan avgPrice yang baru), persis seperti
+ * SO biasa dari sisi hitungan modal — bedanya cuma di kuota SO.
+ */
+export function addManualDealEntry(symbol, { qty, price, budget, orderId, feeUsdt = 0 }) {
+  const deal = _state.deals[symbol];
+  if (!deal) return null;
+  deal.orders.push({ tag: 'manual', qty, price, budget, orderId, fee: feeUsdt, filledAt: new Date().toISOString() });
+  deal.buyFeeUsdt = (deal.buyFeeUsdt || 0) + feeUsdt;
+  saveLocal(_state);
+  log('state', `✋ Entry manual ditambahkan ke deal: ${symbol} @ ${price} budget=${budget}${feeUsdt ? ` fee=${feeUsdt.toFixed(4)} USDT` : ''} (di luar kuota SO)`);
+  return deal;
+}
+
 export function updateDealCalc(symbol, patch) {
   const deal = _state.deals[symbol];
   if (!deal) return null;

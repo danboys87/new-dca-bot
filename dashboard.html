@@ -34,7 +34,8 @@ input,select{font-family:var(--mono);font-size:12px;border:1px solid var(--borde
 .stat-value{font-family:var(--mono);font-size:19px}
 .stat-value.green{color:var(--green)} .stat-value.red{color:var(--red)}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
-.panel-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.panel-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;padding:8px 12px;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border);background:var(--bg)}
 td{padding:9px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px}
@@ -154,10 +155,10 @@ tr.day-detail th{background:var(--surface)}
     <span>⏸ Entry Pending</span>
     <span class="badge yellow" id="pendingBadge">—</span>
   </div>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Symbol</th><th>Nunggu</th><th>Action</th></tr></thead>
     <tbody id="pending-body"></tbody>
-  </table>
+  </table></div>
   <div class="day-note">ℹ️ Deal ini nunggu harga naik di atas EMA (Entry Filter) sebelum bot buka base order-nya. Dicek ulang otomatis tiap loop.</div>
 </div>
 
@@ -166,10 +167,10 @@ tr.day-detail th{background:var(--surface)}
     <span>📝 Limit Order Pending</span>
     <span class="badge yellow" id="limitPendingBadge">—</span>
   </div>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Symbol</th><th>Harga Limit</th><th>Qty</th><th>Nunggu</th><th>Action</th></tr></thead>
     <tbody id="limit-pending-body"></tbody>
-  </table>
+  </table></div>
   <div class="day-note">ℹ️ Base order dipasang sebagai LIMIT order, belum aktif sampai kefill. Otomatis dibatalkan kalau tidak kefill dalam batas waktu timeout (lihat Config).</div>
 </div>
 </div><!-- /page pending -->
@@ -178,16 +179,16 @@ tr.day-detail th{background:var(--surface)}
 <div class="panel">
   <div class="panel-header">
     <span>📂 Deal Aktif</span>
-    <span style="display:flex;gap:6px">
+    <span style="display:flex;gap:6px;flex-wrap:wrap">
       <input id="startSymbol" placeholder="BTCUSDT" style="width:110px;text-transform:uppercase">
       <input id="startPrice" type="number" step="any" placeholder="Harga (opsional)" style="width:140px" title="Kosongkan utk market order / default config. Isi utk limit buy PERSIS di harga ini.">
       <button class="btn success" onclick="doStart()">+ Buka Deal</button>
     </span>
   </div>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Symbol</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>SO</th><th>Next SO</th><th>TP</th><th>SL</th><th>Trend</th><th>Action</th></tr></thead>
     <tbody id="deals-body"><tr><td colspan="11" class="empty">Belum connect</td></tr></tbody>
-  </table>
+  </table></div>
 </div>
 </div><!-- /page deals -->
 
@@ -195,16 +196,16 @@ tr.day-detail th{background:var(--surface)}
 <div class="panel">
   <div class="panel-header">
     <span>🎯 Manual Position (di luar DCA)</span>
-    <span style="display:flex;gap:6px">
+    <span style="display:flex;gap:6px;flex-wrap:wrap">
       <input id="posSymbol" placeholder="BTCUSDT" style="width:110px;text-transform:uppercase">
       <input id="posBudget" type="number" step="any" placeholder="Budget USDT" style="width:110px">
       <button class="btn success" onclick="doAddPosition()" title="Entry pertama buka posisi baru; kalau sudah ada posisi di symbol ini, jadi entry tambahan">+ Entry</button>
     </span>
   </div>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Symbol</th><th>Total USDT</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>Entry ke</th><th>SL</th><th>Trailing</th><th>Action</th></tr></thead>
     <tbody id="positions-body"><tr><td colspan="10" class="empty">Belum ada Manual Position aktif</td></tr></tbody>
-  </table>
+  </table></div>
   <div class="day-note">ℹ️ Entry manual — kamu yang tentukan kapan & berapa besar tiap entry (bukan aturan safety order DCA). Stop Loss aktif dari awal, mengikuti avg price terbaru. Trailing Stop baru aktif setelah harga naik sekian % dari avg entry, lalu mengikuti harga tertinggi — <b>tiap ada entry tambahan, status trailing di-reset dan mulai lagi dari nol</b> berdasarkan avg price yang baru (supaya tidak salah trigger karena peak lama sudah tidak relevan).</div>
 </div>
 </div><!-- /page position -->
@@ -213,7 +214,7 @@ tr.day-detail th{background:var(--surface)}
 <div class="panel">
   <div class="panel-header">
     <span>📅 PnL Harian</span>
-    <span style="display:flex;gap:6px;align-items:center">
+    <span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <select id="dailyRange" onchange="renderDailyFromCache()" style="width:120px">
         <option value="14">14 hari</option>
         <option value="30" selected>30 hari</option>
@@ -223,10 +224,10 @@ tr.day-detail th{background:var(--surface)}
       <button class="btn" onclick="loadHistory()">↻ Refresh</button>
     </span>
   </div>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Tanggal</th><th>Deal Ditutup</th><th>Win Rate</th><th>PnL (USDT)</th></tr></thead>
     <tbody id="daily-body"><tr><td colspan="4" class="empty">—</td></tr></tbody>
-  </table>
+  </table></div>
   <div class="day-note">ℹ️ Klik baris tanggal utk lihat detail deal di hari itu. Deal yang ditutup lewat <b>Manual Sell</b> (di luar bot) ikut tercatat tapi PnL-nya tidak dihitung ke Total PnL / Win Rate / Compounding.</div>
 </div>
 </div><!-- /page history -->
@@ -237,10 +238,10 @@ tr.day-detail th{background:var(--surface)}
     <span>📜 Riwayat Manual Position</span>
     <button class="btn" onclick="loadPositionHistory()">↻ Refresh</button>
   </div>
-  <table>
+  <div class="table-wrap"><table>
     <thead><tr><th>Symbol</th><th>Avg</th><th>Exit</th><th>PnL%</th><th>PnL USDT (net fee)</th><th>Entry</th><th>Reason</th><th>Waktu</th></tr></thead>
     <tbody id="pos-history-body"><tr><td colspan="8" class="empty">—</td></tr></tbody>
-  </table>
+  </table></div>
 </div>
 </div><!-- /page poshistory -->
 
@@ -525,6 +526,7 @@ function renderDeals(deals) {
       </td>
       <td>
         <div class="action-cell">
+          <button class="btn ghost small" onclick="doAddDealEntry('${sym}')" title="Entry manual tambahan ke deal ini SEKARANG (market buy), budget bebas, DI LUAR kuota Safety Order">+ Entry</button>
           <button class="btn danger small" onclick="doClose('${sym}')" title="Bot eksekusi market sell asli">Close (Sell)</button>
           <button class="btn ghost small" onclick="doUntrack('${sym}')" title="Kamu sudah jual sendiri di luar bot — bot cuma berhenti mantau, TIDAK ada order, PnL tidak dihitung">Manual Sell</button>
           ${d.tpHold
@@ -724,10 +726,10 @@ function buildDayDetailHtml(key) {
       <td style="font-size:10px">${new Date(d.closedAt).toLocaleString('id-ID')}</td>
     </tr>`;
   }).join('');
-  return `<table>
+  return `<div class="table-wrap"><table>
     <thead><tr><th>Symbol</th><th>Avg</th><th>Exit</th><th>PnL%</th><th>PnL USDT (net fee)</th><th>Fee</th><th>SO</th><th>Reason</th><th>Waktu</th></tr></thead>
     <tbody>${rows}</tbody>
-  </table>`;
+  </table></div>`;
 }
 
 function toggleDay(key) {
@@ -909,6 +911,17 @@ async function doClose(sym) {
   const res = await apiPost('/api/close', { symbol: sym });
   alert(res.ok ? `✅ Deal ${sym} ditutup` : `❌ ${res.error}`);
   if (res.ok) { refreshAll(); loadHistory(); loadCompoundStatus(); }
+}
+
+async function doAddDealEntry(sym) {
+  const budgetRaw = prompt(`Entry manual tambahan ke ${sym}\n\nBudget berapa USDT? (market buy sekarang, DI LUAR kuota Safety Order — tidak mengurangi maxSafetyOrders)`);
+  if (budgetRaw === null) return; // dibatalkan
+  const budget = parseFloat(budgetRaw);
+  if (!(budget > 0)) return alert('Budget tidak valid');
+
+  const res = await apiPost('/api/deal/add-entry', { symbol: sym, budget });
+  alert(res.ok ? `✅ Entry manual ${sym} berhasil. Avg price sekarang: ${res.deal.avgPrice.toFixed(6)}` : `❌ ${res.error}`);
+  if (res.ok) { refreshAll(); }
 }
 
 async function doUntrack(sym) {

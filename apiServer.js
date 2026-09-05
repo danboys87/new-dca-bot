@@ -202,6 +202,18 @@ async function handle(req, res) {
     return;
   }
 
+  // Entry manual tambahan ke deal DCA yang SUDAH AKTIF — budget bebas, market
+  // buy sekarang juga, di luar kuota Safety Order.
+  if (route === '/api/deal/add-entry' && method === 'POST') {
+    const { symbol, budget } = await readBody(req);
+    if (!symbol) { err(res, 'symbol required'); return; }
+    const parsedBudget = parseFloat(budget);
+    if (!(parsedBudget > 0)) { err(res, 'budget tidak valid'); return; }
+    try { json(res, await _callbacks.addManualDealEntry(symbol.toUpperCase(), parsedBudget)); }
+    catch (e) { err(res, e.message); }
+    return;
+  }
+
   // Batalkan entry yang lagi pending (nunggu syarat Entry Filter).
   if (route === '/api/cancel-entry' && method === 'POST') {
     const { symbol } = await readBody(req);

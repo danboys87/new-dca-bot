@@ -53,6 +53,22 @@ export async function notifySafetyOrder(deal, step) {
   );
 }
 
+/**
+ * Entry manual tambahan ke deal DCA (di luar kuota Safety Order — tidak
+ * mengurangi maxSafetyOrders, tidak mempercepat aktivasi SL).
+ */
+export async function notifyDealManualEntry(deal) {
+  const lastEntry = deal.orders[deal.orders.length - 1];
+  await send(
+    `✋ <b>Entry Manual Ditambahkan</b> — ${deal.symbol}\n` +
+    `Entry ini: ${lastEntry.qty} @ ${lastEntry.price} (${lastEntry.budget} USDT)\n` +
+    `Avg price baru: ${deal.avgPrice.toFixed(6)} | Total qty: ${deal.totalQty}\n` +
+    `TP baru: ${tpLabel(deal)} | SL: ${slLabel(deal)}\n` +
+    `SO terpakai: ${deal.safetyOrdersFilled} (tidak berubah — entry manual di luar kuota SO)\n` +
+    `SO berikutnya @ ${deal.nextSOPrice?.toFixed(6) ?? '(kuota SO habis)'}`
+  );
+}
+
 export async function notifyDealClosed(closed) {
   const emoji = closed.pnlPct >= 0 ? '🟢' : '🔴';
   const sign  = closed.pnlPct >= 0 ? '+' : '';
