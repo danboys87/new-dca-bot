@@ -186,8 +186,8 @@ tr.day-detail th{background:var(--surface)}
     </span>
   </div>
   <div class="table-wrap"><table>
-    <thead><tr><th>Symbol</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>SO</th><th>Next SO</th><th>TP</th><th>SL</th><th>Trend</th><th>Action</th></tr></thead>
-    <tbody id="deals-body"><tr><td colspan="11" class="empty">Belum connect</td></tr></tbody>
+    <thead><tr><th>Symbol</th><th>Total USDT</th><th>Avg Entry</th><th>Now</th><th>PnL % (net fee)</th><th>PnL USDT (net fee)</th><th>SO</th><th>Next SO</th><th>TP</th><th>SL</th><th>Trend</th><th>Action</th></tr></thead>
+    <tbody id="deals-body"><tr><td colspan="12" class="empty">Belum connect</td></tr></tbody>
   </table></div>
 </div>
 </div><!-- /page deals -->
@@ -400,7 +400,7 @@ async function refreshAll() {
     if (!configDirty) {
       renderConfig(d.config);
     }
-  } catch(e) { document.getElementById('deals-body').innerHTML = '<tr><td colspan="11" class="empty">Gagal connect ke ' + API + '</td></tr>'; }
+  } catch(e) { document.getElementById('deals-body').innerHTML = '<tr><td colspan="12" class="empty">Gagal connect ke ' + API + '</td></tr>'; }
 }
 
 // ── Entry Pending ────────────────────────────────────────────────────────
@@ -495,7 +495,7 @@ async function doApplyCompound() {
 function renderDeals(deals) {
   const entries = Object.entries(deals || {});
   const tbody = document.getElementById('deals-body');
-  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="11" class="empty">Tidak ada deal aktif</td></tr>'; return; }
+  if (!entries.length) { tbody.innerHTML = '<tr><td colspan="12" class="empty">Tidak ada deal aktif</td></tr>'; return; }
   tbody.innerHTML = entries.map(([sym, d]) => {
     const sign = d.pnlPct >= 0 ? '+' : '';
     const cls  = d.pnlPct >= 0 ? 'green' : 'red';
@@ -510,6 +510,7 @@ function renderDeals(deals) {
       : '';
     return `<tr class="${d.tpHold ? 'tp-hold' : ''}">
       <td><b>${sym}</b></td>
+      <td>${d.totalSpent != null ? d.totalSpent.toFixed(2) + ' USDT' : '—'}</td>
       <td>${d.avgPrice?.toFixed(6)}</td>
       <td>${d.currentPrice ?? '—'}</td>
       <td style="color:var(--${cls})" ${pnlTitle}>${sign}${d.pnlPct?.toFixed(2) ?? '—'}%</td>
