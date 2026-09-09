@@ -295,6 +295,55 @@ export function getActivePositions()      { return _state.positions; }
 export function getActivePositionSymbols(){ return Object.keys(_state.positions); }
 
 /**
+ * Pindahkan deal DCA yang SUDAH AKTIF ke Manual Position — TANPA transaksi
+ * apapun ke Bitget. Qty/holding yang sudah dibeli TETAP SAMA persis; yang
+ * berubah cuma cara bot mengelolanya: dari DCA (Safety Order otomatis +
+ * Take Profit tetap) jadi Manual Position (Stop Loss tetap + Trailing Stop,
+ * entry manual bebas kapan saja).
+ *
+ * Semua riwayat entry (base order + SO yang sudah terisi + entry manual DCA
+ * kalau ada) ikut dibawa jadi `entries`, begitu juga akumulasi fee beli.
+ * Deal DCA-nya dihapus total setelah pindah — safetyOrdersFilled, tpPrice,
+ * tpHold, dst SEMUA hilang (tidak relevan lagi di Manual Position).
+ *
+ * Return null kalau deal tidak ditemukan atau symbol itu SUDAH punya Manual
+ * Position aktif (caller — index.js — yang validasi ini sebelum panggil,
+ * fungsi ini cuma safety net kedua).
+ */
+export function migrateDealToPosition(symbol, { stopLossPercent, trailingActivationPercent, trailingStopPercent }) {
+  const deal = _state.deals[symbol];
+  if (!deal) return null;
+  if (_state.positions[symbol]) return null;
+
+  const position = {
+    symbol,
+    status: 'active',
+    totalQty:   deal.totalQty,
+    totalSpent: deal.totalSpent,
+    avgPrice:   deal.avgPrice,
+    buyFeeUsdt: deal.buyFeeUsdt || 0,
+    stopLossPercent,
+    slPrice: null, // dihitung lewat recalcPosition() di executor.js
+    trailingActivationPercent,
+    trailingStopPercent,
+    trailingActive: false, // SENGAJA mulai dari nol — trailing lama (kalau ada konsepnya di DCA) tidak relevan
+    peakPrice: null,
+    trailingStopPrice: null,
+    openedAt: deal.openedAt, // waktu buka ASLI dipertahankan (bukan waktu migrasi)
+    migratedFromDeal: true,
+    migratedAt: new Date().toISOString(),
+    entries: deal.orders.map(o => ({ ...o })), // salin semua riwayat fill apa adanya
+  };
+
+  delete _state.deals[symbol];
+  _state.positions[symbol] = position;
+  saveLocal(_state);
+
+  log('state', `🔀 Deal DCA ${symbol} dipindahkan ke Manual Position | avg=${deal.avgPrice.toFixed(6)} qty=${deal.totalQty} | ${deal.orders.length} entry dibawa`);
+  return position;
+}
+
+/**
  * Buka posisi manual baru (entry pertama). stopLossPercent/trailingActivationPercent/
  * trailingStopPercent "dikunci" saat posisi dibuka (dari config.position saat itu) —
  * ganti config setelahnya TIDAK mempengaruhi posisi yang sudah berjalan.

@@ -214,6 +214,15 @@ async function handle(req, res) {
     return;
   }
 
+  // Pindahkan deal DCA aktif ke Manual Position — TIDAK ADA transaksi ke Bitget.
+  if (route === '/api/deal/migrate-to-position' && method === 'POST') {
+    const { symbol } = await readBody(req);
+    if (!symbol) { err(res, 'symbol required'); return; }
+    try { json(res, await _callbacks.migrateDeal(symbol.toUpperCase())); }
+    catch (e) { err(res, e.message); }
+    return;
+  }
+
   // Batalkan entry yang lagi pending (nunggu syarat Entry Filter).
   if (route === '/api/cancel-entry' && method === 'POST') {
     const { symbol } = await readBody(req);

@@ -148,6 +148,16 @@ async function handleCommand(chatId, text, callbacks) {
       break;
     }
 
+    case '/migrate': {
+      if (!arg) { await reply(chatId, '❓ Format: /migrate SYMBOL\nContoh: /migrate BTCUSDT\n\nPindahkan deal DCA yang aktif ke Manual Position. TIDAK ADA transaksi ke Bitget — cuma cara bot mengelola posisi ini yang berubah: SO & TP otomatis DCA dilepas, diganti Stop Loss tetap + Trailing Stop (default dari config.position). Ditolak kalau symbol itu sudah punya Manual Position aktif juga.'); break; }
+      await reply(chatId, `⏳ Memindahkan deal ${arg} ke Manual Position...`);
+      try {
+        const res = await callbacks.migrateDeal(arg);
+        await reply(chatId, res.ok ? `✅ ${arg} sudah dipindahkan ke Manual Position. SL: ${res.position.slPrice?.toFixed(6) ?? '—'}` : `❌ ${res.error}`);
+      } catch (e) { await reply(chatId, `❌ Error: ${e.message}`); }
+      break;
+    }
+
     case '/closedca': {
       if (!arg) { await reply(chatId, '❓ Format: /closedca SYMBOL\n(Bot akan eksekusi market sell asli. Kalau kamu sudah jual sendiri di luar bot, pakai /untrack SYMBOL.)'); break; }
       await reply(chatId, `⏳ Menutup deal ${arg} (market sell)...`);
@@ -358,6 +368,7 @@ async function handleCommand(chatId, text, callbacks) {
         `/startdca SYMBOL [HARGA] — buka deal baru (base order). Kosongkan HARGA utk market/default; isi HARGA utk limit buy persis di harga itu\n` +
         `/closedca SYMBOL  — tutup deal manual (bot market sell)\n` +
         `/addentry SYMBOL BUDGET — entry manual ke deal DCA aktif, di luar kuota SO\n` +
+        `/migrate SYMBOL — pindahkan deal DCA ke Manual Position (tanpa transaksi ke Bitget)\n` +
         `/untrack SYMBOL   — tandai selesai TANPA sell dari bot (kamu sudah jual sendiri di luar bot; PnL tidak dihitung)\n` +
         `/hold SYMBOL      — bekukan TP sementara (SO & SL tetap normal)\n` +
         `/resume SYMBOL    — aktifkan lagi TP normal\n` +

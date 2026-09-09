@@ -533,6 +533,7 @@ function renderDeals(deals) {
           ${d.tpHold
             ? `<button class="btn warn small" onclick="doResume('${sym}')" title="Aktifkan lagi TP normal">▶ Resume TP</button>`
             : `<button class="btn ghost small" onclick="doHold('${sym}')" title="Bekukan TP sementara — SO & SL tetap normal, nunggu harga naik lebih tinggi dulu">⏸ Hold TP</button>`}
+          <button class="btn ghost small" onclick="doMigrateToPosition('${sym}')" title="Pindahkan ke Manual Position — TIDAK ADA transaksi ke Bitget, cuma ganti cara bot mengelola (SO/TP DCA dilepas, diganti SL tetap + Trailing Stop)">🎯 Manual Position</button>
         </div>
       </td>
     </tr>`;
@@ -922,6 +923,24 @@ async function doAddDealEntry(sym) {
 
   const res = await apiPost('/api/deal/add-entry', { symbol: sym, budget });
   alert(res.ok ? `✅ Entry manual ${sym} berhasil. Avg price sekarang: ${res.deal.avgPrice.toFixed(6)}` : `❌ ${res.error}`);
+  if (res.ok) { refreshAll(); }
+}
+
+async function doMigrateToPosition(sym) {
+  if (!confirm(
+    `Pindahkan deal DCA ${sym} ke Manual Position?\n\n` +
+    `TIDAK ADA transaksi ke Bitget — qty/holding yang sudah dibeli TETAP SAMA.\n\n` +
+    `Yang berubah:\n` +
+    `• Take Profit & Safety Order otomatis DCA akan DILEPAS (tidak berlaku lagi)\n` +
+    `• Diganti Stop Loss TETAP + Trailing Stop (pakai default dari Config → Manual Position)\n` +
+    `• Riwayat entry & fee yang sudah ada ikut dibawa\n\n` +
+    `Aksi ini TIDAK BISA dibatalkan otomatis — kamu perlu setup manual lagi kalau mau balik ke DCA. Lanjutkan?`
+  )) return;
+
+  const res = await apiPost('/api/deal/migrate-to-position', { symbol: sym });
+  alert(res.ok
+    ? `✅ ${sym} sudah dipindahkan ke Manual Position.\nSL: ${res.position.slPrice?.toFixed(6) ?? '—'}\nTrailing aktif di atas: ${(res.position.avgPrice * (1 + res.position.trailingActivationPercent / 100)).toFixed(6)}`
+    : `❌ ${res.error}`);
   if (res.ok) { refreshAll(); }
 }
 

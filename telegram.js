@@ -69,6 +69,22 @@ export async function notifyDealManualEntry(deal) {
   );
 }
 
+/**
+ * Deal DCA dipindahkan ke Manual Position — TIDAK ADA transaksi ke Bitget,
+ * murni perubahan cara bot mengelola posisi ini (SO/TP DCA dilepas, diganti
+ * SL tetap + Trailing Stop).
+ */
+export async function notifyDealMigratedToPosition(position) {
+  await send(
+    `🔀 <b>Deal Dipindahkan ke Manual Position</b> — ${position.symbol}\n` +
+    `Avg price: ${position.avgPrice.toFixed(6)} | Total qty: ${position.totalQty} | Jumlah entry: ${position.entries.length}\n` +
+    `TIDAK ADA transaksi ke Bitget — cuma cara bot mengelola posisi ini yang berubah.\n\n` +
+    `SO/TP DCA sudah TIDAK berlaku lagi utk ${position.symbol}. Sekarang pakai:\n` +
+    `SL: ${position.slPrice?.toFixed(6) ?? '—'} (${position.stopLossPercent}%)\n` +
+    `Trailing aktif di atas: ${(position.avgPrice * (1 + position.trailingActivationPercent / 100)).toFixed(6)} (+${position.trailingActivationPercent}%), trail ${position.trailingStopPercent}%`
+  );
+}
+
 export async function notifyDealClosed(closed) {
   const emoji = closed.pnlPct >= 0 ? '🟢' : '🔴';
   const sign  = closed.pnlPct >= 0 ? '+' : '';

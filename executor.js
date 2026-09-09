@@ -6,6 +6,7 @@ import { log, logTrade } from './logger.js';
 import {
   startDeal, addSafetyOrderFill, addManualDealEntry, updateDealCalc, closeDeal, getDeal,
   hasActivePosition, startPosition, addPositionEntry, updatePositionCalc, closePosition, getPosition,
+  migrateDealToPosition,
 } from './state.js';
 import { recalcDeal } from './dcaEngine.js';
 import { recalcPosition } from './positionEngine.js';
@@ -311,4 +312,26 @@ export async function closePositionMarket(symbol, reason) {
 
   logTrade({ side: 'sell', symbol, qty, price, tag: `position_${reason}` });
   return closePosition(symbol, { exitPrice: price, reason, feeUsdt });
+}
+
+/**
+ * Pindahkan deal DCA aktif ke Manual Position — TIDAK ADA transaksi ke
+ * Bitget sama sekali (murni perubahan internal state). SL/trailing pakai
+ * default dari config.position SAAT INI (dikunci begitu migrasi terjadi,
+ * sama seperti Manual Position baru pada umumnya).
+ */
+export function migrateDealToManualPosition(symbol) {
+  const pc = config.position || {};
+  const position = migrateDealToPosition(symbol, {
+    stopLossPercent:            pc.stopLossPercent ?? 10,
+    trailingActivationPercent:  pc.trailingActivationPercent ?? 3,
+    trailingStopPercent:        pc.trailingStopPercent ?? 2,
+  });
+  if (!position) throw new Error(`Gagal migrate ${symbol} — deal tidak ditemukan atau ${symbol} sudah punya Manual Position aktif`);
+
+  recalcPosition(position);
+  updatePositionCalc(symbol, position);
+
+  log('executor', `🔀 ${symbol} dipindahkan dari deal DCA ke Manual Position | avg=${position.avgPrice.toFixed(6)} qty=${position.totalQty} | SL baru=${position.slPrice?.toFixed(6) ?? '—'}`);
+  return position;
 }

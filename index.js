@@ -24,13 +24,14 @@ import { evaluatePosition, calcTrailingStopPrice } from './positionEngine.js';
 import {
   openDeal, openDealLimit, checkLimitOrderFilled, cancelPendingLimitOrder, finalizeBaseOrder,
   fillSafetyOrder, closeDealMarket, openOrAddPosition, closePositionMarket, addManualEntryToDeal,
+  migrateDealToManualPosition,
 } from './executor.js';
 import {
   notifyDealOpened, notifySafetyOrder, notifyDealClosed, notifyDealUntracked, notifyError, notifyStartup,
   notifyDealManualEntry,
   notifyCompoundingAvailable, notifyCompoundingApplied, notifyEntryPending, notifyEntryCancelled,
   notifyLimitOrderPlaced, notifyLimitOrderCancelled,
-  notifyPositionEntry, notifyPositionTrailingActivated, notifyPositionClosed,
+  notifyPositionEntry, notifyPositionTrailingActivated, notifyPositionClosed, notifyDealMigratedToPosition,
 } from './telegram.js';
 import { startTelegramPolling, stopTelegramPolling } from './telegramCommands.js';
 import { startApiServer } from './apiServer.js';
@@ -154,6 +155,27 @@ export async function addManualDealEntry(symbol, budget) {
   } catch (e) {
     log('executor_error', `Gagal entry manual ${symbol}: ${e.message}`);
     await notifyError(`Gagal entry manual ${symbol}: ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Pindahkan deal DCA aktif ke Manual Position — TANPA transaksi ke Bitget.
+ * SO/TP DCA dilepas total; digantikan Stop Loss tetap + Trailing Stop
+ * (default dari config.position). Ditolak kalau symbol itu sudah punya
+ * Manual Position aktif juga (tidak ada penggabungan otomatis).
+ */
+export async function migrateDeal(symbol) {
+  if (!hasActiveDeal(symbol)) return { ok: false, error: `Deal ${symbol} tidak aktif` };
+  if (hasActivePosition(symbol)) {
+    return { ok: false, error: `${symbol} sudah punya Manual Position aktif — tutup/selesaikan salah satu dulu (tidak ada penggabungan otomatis)` };
+  }
+  try {
+    const position = migrateDealToManualPosition(symbol);
+    await notifyDealMigratedToPosition(position);
+    return { ok: true, position };
+  } catch (e) {
+    log('executor_error', `Gagal migrate ${symbol}: ${e.message}`);
     return { ok: false, error: e.message };
   }
 }
@@ -691,7 +713,7 @@ async function showStatus() {
 // ─────────────────────────────────────────────────────────────────────────────
 function startREPL() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '\n[dca-bot] > ' });
-  console.log('\n📖 Perintah: status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | addentry SYMBOL BUDGET | addposition SYMBOL BUDGET | closeposition SYMBOL | positions | stop | help\n');
+  console.log('\n📖 Perintah: status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | addentry SYMBOL BUDGET | migrate SYMBOL | addposition SYMBOL BUDGET | closeposition SYMBOL | positions | stop | help\n');
   rl.prompt();
 
   rl.on('line', async (line) => {
@@ -741,6 +763,11 @@ function startREPL() {
         console.log(await addManualDealEntry(arg.toUpperCase(), budget));
         break;
       }
+      case 'migrate': {
+        if (!arg) { console.log('Format: migrate SYMBOL  (pindahkan deal DCA ke Manual Position, TIDAK ADA transaksi ke Bitget)'); break; }
+        console.log(await migrateDeal(arg.toUpperCase()));
+        break;
+      }
       case 'addposition': {
         if (!arg || !arg2) { console.log('Format: addposition SYMBOL BUDGET  (mis. addposition BTCUSDT 20)'); break; }
         const budget = parseFloat(arg2);
@@ -755,7 +782,7 @@ function startREPL() {
         console.log(getActivePositions()); break;
       case 'stop': stopLoop(); stopTrendLoop(); stopTelegramPolling(); process.exit(0); break;
       case 'help':
-        console.log('  status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | addentry SYMBOL BUDGET | addposition SYMBOL BUDGET | closeposition SYMBOL | positions | stop'); break;
+        console.log('  status | start SYMBOL [HARGA] | close SYMBOL | untrack SYMBOL | hold SYMBOL | resume SYMBOL | pending | cancelentry SYMBOL | cancellimit SYMBOL | compound [apply] | reopen on/off | addentry SYMBOL BUDGET | migrate SYMBOL | addposition SYMBOL BUDGET | closeposition SYMBOL | positions | stop'); break;
       default: console.log(`❓ Perintah tidak dikenal: "${cmd}"`);
     }
     rl.prompt();
@@ -802,13 +829,13 @@ async function main() {
   startTelegramPolling({
     startDeal, closeDealManual, closeDealUntrack, holdTP, resumeTP,
     compoundNow, compoundStatus, cancelPendingEntry, cancelPendingLimitEntry,
-    addPosition, closePositionManual, positionStats, addManualDealEntry,
+    addPosition, closePositionManual, positionStats, addManualDealEntry, migrateDeal,
   });
 
   startApiServer({
     startDeal, closeDealManual, closeDealUntrack, holdTP, resumeTP,
     compoundNow, compoundStatus, cancelPendingEntry, cancelPendingLimitEntry,
-    addPosition, closePositionManual, positionStats, addManualDealEntry,
+    addPosition, closePositionManual, positionStats, addManualDealEntry, migrateDeal,
   });
 
   if (process.stdin.isTTY) startREPL();
