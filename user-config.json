@@ -2,7 +2,7 @@
   "trading": {
     "quoteAsset": "USDT",
     "maxActiveDeals": 5,
-    "gasReserve": 3,
+    "gasReserve": 2,
     "checkIntervalSec": 60,
     "_comment_reopen": "Auto Reopen: kalau reopenAfterClose=true, deal yang closed karena alasan di reopenOnReasons akan otomatis dibuka lagi setelah nunggu cooldownAfterCloseMin menit. Bisa di-toggle ON/OFF kapan saja lewat dashboard, Telegram (/reopen on|off), atau edit file ini + restart. Kalau reopen gagal karena error transient (network/timeout dll), otomatis di-retry sampai maxReopenRetries kali dengan jeda reopenRetryDelayMin menit tiap percobaan — kalau tetap gagal, bot berhenti nyoba & kirim notifikasi. Kalau gagalnya karena alasan permanen (blacklist/whitelist/slot penuh/sudah aktif), TIDAK diulang sama sekali.",
     "cooldownAfterCloseMin": 1,
@@ -37,7 +37,7 @@
     "priceDeviationPercent": 2,
     "_comment_scaling": "Multiplier opsional ala 3Commas — tiap Safety Order berikutnya bisa lebih besar (volumeScale) dan jaraknya makin lebar (stepScale). Set 1 kalau mau flat/tidak scaling.",
     "safetyOrderVolumeScale": 1,
-    "safetyOrderStepScale": 1,
+    "safetyOrderStepScale": 1.4,
     "_comment_takeProfit": "takeProfitBasis: 'average' = TP dari harga rata-rata semua order terisi. 'base' = TP tetap dari harga initial order saja. 'both' = TP trigger begitu SALAH SATU tercapai duluan (base ATAU average) — biasanya average nyampe duluan karena averagenya lebih rendah tiap SO terisi.",
     "takeProfitPercent": 1,
     "takeProfitBasis": "both",
@@ -49,10 +49,10 @@
   "position": {
     "_comment": "Manual Position — DILUAR DCA. Entry SEPENUHNYA manual (kamu yang tentukan kapan & berapa besar tiap entry, bisa berkali-kali, harga apa saja — bukan aturan safety order DCA). TIDAK ada Take Profit tetap — exit HANYA lewat Trailing Stop, Stop Loss tetap, atau close manual. Nilai di sini jadi DEFAULT saat posisi baru dibuka (entry pertama di suatu symbol); begitu posisi sudah berjalan, ganti config ini TIDAK mempengaruhi posisi yang sedang aktif.",
     "_comment_stopLoss": "Stop Loss TETAP — basis avgPrice, aktif SEPANJANG WAKTU sejak entry pertama (beda dari DCA yg SL-nya baru aktif setelah SO habis). Proteksi kalau harga anjlok duluan sebelum sempat naik ke titik aktivasi trailing.",
-    "stopLossPercent": 10,
+    "stopLossPercent": 0,
     "_comment_trailing": "Trailing Stop BELUM aktif sampai harga naik trailingActivationPercent% dari avgPrice. Begitu aktif, bot 'mengikuti' harga tertinggi (peak) — kalau harga turun trailingStopPercent% dari peak, posisi otomatis ditutup (mengunci profit).",
-    "trailingActivationPercent": 5,
-    "trailingStopPercent": 3
+    "trailingActivationPercent": 8,
+    "trailingStopPercent": 4
   },
   "whitelist": [],
   "blacklist": [
